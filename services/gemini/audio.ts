@@ -1,24 +1,44 @@
 
 import { Modality } from "@google/genai";
-import { ProjectContext } from "../../types";
+import { ProjectContext, LanguageRegister } from "../../types";
 import { ai } from "./client";
 
 export const generateAdScript = async (project: ProjectContext, personaName: string, angle: string): Promise<string> => {
     const model = "gemini-2.5-flash";
     const country = project.targetCountry || "USA";
     const isIndo = country.toLowerCase().includes("indonesia");
+    const register = project.languageRegister || LanguageRegister.CASUAL;
     
-    let lang = isIndo ? "Bahasa Indonesia (Natural Social Media Style)" : "English";
+    let lang = "English";
     let extraInstr = "";
     
     if (isIndo) {
-        extraInstr = `
-        CRITICAL RULES:
-        - NO formal words like "Halo", "Perkenalkan", "Fitur".
-        - Use "Gue/Lo" or "Aku/Kamu".
-        - Use particles: "sih", "dong", "deh".
-        - Sound like a real user reviewing, not an ad script.
-        `;
+        if (register.includes("Street/Slang")) {
+            lang = "Bahasa Indonesia (Gaul/Slang/Jaksel)";
+            extraInstr = `
+            CRITICAL RULES:
+            - NO formal words like "Halo", "Perkenalkan", "Fitur".
+            - Use "Gue/Lo".
+            - Use particles: "sih", "dong", "deh".
+            - Sound like a Gen Z TikTok creator.
+            `;
+        } else if (register.includes("Formal/Professional")) {
+            lang = "Bahasa Indonesia (Formal/Professional)";
+            extraInstr = `
+            CRITICAL RULES:
+            - Use "Anda/Saya". 
+            - NO Slang. No "Gue/Lo".
+            - Sound like a Consultant, Doctor, or News Anchor.
+            `;
+        } else {
+            lang = "Bahasa Indonesia (Casual Polite)";
+            extraInstr = `
+            CRITICAL RULES:
+            - Use "Aku/Kamu".
+            - Friendly but respectful.
+            - Sound like a Mom Blogger or Friendly Neighbor.
+            `;
+        }
     }
 
     const response = await ai.models.generateContent({

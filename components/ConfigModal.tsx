@@ -1,7 +1,7 @@
 
 import React, { useState, useRef } from 'react';
-import { Globe, ImageIcon, Upload, X, Target, ChevronDown, MessageSquare } from 'lucide-react';
-import { ProjectContext, MarketAwareness, FunnelStage, CopyFramework } from '../types';
+import { Globe, ImageIcon, Upload, X, Target, ChevronDown, MessageSquare, Mic } from 'lucide-react';
+import { ProjectContext, MarketAwareness, FunnelStage, CopyFramework, LanguageRegister } from '../types';
 import { analyzeImageContext, analyzeLandingPageContext } from '../services/geminiService';
 import { scrapeLandingPage } from '../services/firecrawlService';
 
@@ -208,13 +208,17 @@ const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, project, onU
                         />
                     </div>
                     <div>
-                        <EditableSelect 
-                            label="The Offer" 
-                            value={project.offer || ''} 
-                            onChange={(val) => onUpdateProject({ offer: val })} 
-                            options={project.offerOptions || []} 
-                            placeholder="e.g. 50% Off" 
-                        />
+                         {/* LANGUAGE REGISTER SELECTOR (Solves the "Jaksel Bubble") */}
+                        <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-1"><Mic className="w-3.5 h-3.5"/> Language Register</label>
+                        <select 
+                            className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm cursor-pointer hover:border-blue-300 transition-colors"
+                            value={project.languageRegister || LanguageRegister.CASUAL}
+                            onChange={(e) => onUpdateProject({ languageRegister: e.target.value as LanguageRegister })}
+                        >
+                            {Object.values(LanguageRegister).map(lr => (
+                                <option key={lr} value={lr}>{lr}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="col-span-2">
                         <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2"><MessageSquare className="w-3.5 h-3.5" /> Tone Calibration (Few-Shot Examples)</label>

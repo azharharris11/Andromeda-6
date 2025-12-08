@@ -1,4 +1,3 @@
-
 import { Type } from "@google/genai";
 import { ProjectContext, GenResult, StoryOption } from "../../types";
 import { ai, extractJSON } from "./client";
@@ -102,100 +101,6 @@ export const analyzeVoiceOfCustomer = async (rawText: string, project: ProjectCo
     inputTokens: response.usageMetadata?.promptTokenCount || 0,
     outputTokens: response.usageMetadata?.candidatesTokenCount || 0
   };
-};
-
-export const analyzeLandingPageContext = async (markdown: string): Promise<ProjectContext> => {
-  const model = "gemini-2.5-flash";
-  
-  const response = await ai.models.generateContent({
-    model,
-    contents: `You are a Data Analyst for a Direct Response Agency. 
-    Analyze the following raw data (Landing Page Content) to extract the foundational truths.
-    Also extract 2-3 examples of existing copy/headlines found on the page to serve as "Tone Calibration" data.
-    
-    RAW DATA:
-    ${markdown.substring(0, 30000)}
-    `,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          productName: { type: Type.STRING },
-          productDescription: { type: Type.STRING, description: "A punchy, benefit-driven 1-sentence value prop." },
-          targetAudience: { type: Type.STRING, description: "Specific demographics and psychographics." },
-          targetCountry: { type: Type.STRING },
-          brandVoice: { type: Type.STRING },
-          brandVoiceOptions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "5 distinct brand voice options based on the content tone." },
-          offer: { type: Type.STRING, description: "The primary hook or deal found on the page." },
-          offerOptions: { type: Type.ARRAY, items: { type: Type.STRING }, description: "5 potential offer angles or deal structures inferred." },
-          brandCopyExamples: { type: Type.STRING, description: "2-3 raw sentences/headlines found on the page that represent the brand voice best." }
-        },
-        required: ["productName", "productDescription", "targetAudience"]
-      }
-    }
-  });
-
-  const data = extractJSON<Partial<ProjectContext>>(response.text || "{}");
-  
-  return {
-    productName: data.productName || "Unknown Product",
-    productDescription: data.productDescription || "",
-    targetAudience: data.targetAudience || "General Audience",
-    targetCountry: data.targetCountry || "USA",
-    brandVoice: data.brandVoice || "Professional",
-    brandVoiceOptions: data.brandVoiceOptions || [],
-    offer: data.offer || "Shop Now",
-    offerOptions: data.offerOptions || [],
-    brandCopyExamples: data.brandCopyExamples || "",
-    landingPageUrl: "" 
-  } as ProjectContext;
-};
-
-export const analyzeImageContext = async (base64Image: string): Promise<ProjectContext> => {
-  const base64Data = base64Image.split(',')[1] || base64Image;
-
-  const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: {
-      parts: [
-        { inlineData: { mimeType: "image/jpeg", data: base64Data } },
-        { text: "Analyze this product image. Extract the Product Name, Description, Target Audience. Also infer the Brand Voice (and 5 options) and potential Offers (and 5 options) suitable for this visual style. Finally, write 2-3 example copy lines that match this visual vibe." }
-      ]
-    },
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          productName: { type: Type.STRING },
-          productDescription: { type: Type.STRING },
-          targetAudience: { type: Type.STRING },
-          targetCountry: { type: Type.STRING },
-          brandVoice: { type: Type.STRING },
-          brandVoiceOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-          offer: { type: Type.STRING },
-          offerOptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-          brandCopyExamples: { type: Type.STRING, description: "2-3 example copy lines matching this visual vibe." }
-        },
-        required: ["productName", "productDescription"]
-      }
-    }
-  });
-
-  const data = extractJSON<Partial<ProjectContext>>(response.text || "{}");
-
-  return {
-    productName: data.productName || "Analyzed Product",
-    productDescription: data.productDescription || "A revolutionary product.",
-    targetAudience: data.targetAudience || "General Audience",
-    targetCountry: data.targetCountry || "USA", 
-    brandVoice: data.brandVoice || "Visual & Aesthetic",
-    brandVoiceOptions: data.brandVoiceOptions || [],
-    offer: data.offer || "Check it out",
-    offerOptions: data.offerOptions || [],
-    brandCopyExamples: data.brandCopyExamples || ""
-  } as ProjectContext;
 };
 
 export const generatePersonas = async (project: ProjectContext): Promise<GenResult<any[]>> => {

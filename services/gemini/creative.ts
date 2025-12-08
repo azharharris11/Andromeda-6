@@ -1,6 +1,6 @@
 
 import { Type } from "@google/genai";
-import { ProjectContext, CreativeFormat, AdCopy, CreativeConcept, GenResult, StoryOption, BigIdeaOption, MechanismOption, MarketAwareness } from "../../types";
+import { ProjectContext, CreativeFormat, AdCopy, CreativeConcept, GenResult, StoryOption, BigIdeaOption, MechanismOption, MarketAwareness, LanguageRegister } from "../../types";
 import { ai, extractJSON } from "./client";
 
 export const generateSalesLetter = async (
@@ -156,6 +156,9 @@ export const generateAdCopy = async (
   const model = "gemini-2.5-flash";
   const country = project.targetCountry || "USA";
   const isIndo = country.toLowerCase().includes("indonesia");
+  
+  // LOGIC FIX: USE SELECTED REGISTER INSTEAD OF HARDCODED SLANG
+  const register = project.languageRegister || LanguageRegister.CASUAL;
 
   // --- 1. PERSONA DEEP DIVE (Agar Emosional) ---
   const deepPsychologyContext = `
@@ -166,27 +169,54 @@ export const generateAdCopy = async (
     - Deep Fear: "${persona.deepFear || 'Failure'}"
     - Motivation: "${persona.motivation || 'Relief'}"
     
-    CRITICAL INSTRUCTION: You are writing to THIS specific person. Use their vocabulary, their fears, and their slang.
+    CRITICAL INSTRUCTION: You are writing to THIS specific person. Use their vocabulary, their fears.
     Do NOT write a generic ad. Speak directly to their 'Bleeding Neck' problem defined above.
   `;
 
-  // --- 2. TONE ADJUSTMENT (Agar Tidak Kaku) ---
+  // --- 2. TONE ADJUSTMENT (Tiered Language Logic) ---
   let toneInstruction = "";
+  
   if (isIndo) {
-      toneInstruction = `
-        LANGUAGE STYLE: Bahasa Indonesia "Anak Jaksel" / Social Media Slang / Bahasa Gaul.
-        - FORBIDDEN WORDS (Too Formal): "Anda", "Kami", "Solusi", "Dapatkan", "Memperkenalkan", "Fitur", "Rasakan", "Temukan".
-        - MANDATORY WORDS/PARTICLES: "Gue/Lo" (or "Aku/Kamu" if soft persona), "Banget", "Sumpah", "Jujur", "Gimana sih", "sih", "deh", "dong", "kan".
-        - VIBE: Bestie sharing a secret or venting to a friend. Not a salesman holding a brochure.
-        - STRUCTURE: Short sentences. Lowercase is okay for aesthetic.
-      `;
+      if (register.includes("Street/Slang")) {
+          // TIER 1: SLANG (Jaksel/Gen Z)
+          toneInstruction = `
+            LANGUAGE STYLE: Bahasa Indonesia "Anak Jaksel" / Social Media Slang / Bahasa Gaul.
+            - FORBIDDEN WORDS (Too Formal): "Anda", "Kami", "Solusi", "Dapatkan", "Memperkenalkan".
+            - MANDATORY WORDS/PARTICLES: "Gue/Lo", "Banget", "Sumpah", "Jujur", "Gimana sih", "sih", "deh", "dong", "kan".
+            - VIBE: Bestie sharing a secret or venting to a friend. Not a salesman holding a brochure.
+          `;
+      } else if (register.includes("Formal/Professional")) {
+          // TIER 3: PROFESSIONAL (B2B/Medical/Elderly)
+          toneInstruction = `
+            LANGUAGE STYLE: Formal, Polite, Professional Indonesian.
+            - USE: "Anda" (You), "Saya" (I), "Kami" (We - Company).
+            - FORBIDDEN WORDS (Too Rude/Slang): "Gue", "Lo", "Aku", "Kamu", "Sumpah", "Banget" (Use "Sangat" instead).
+            - VIBE: Consultant, Doctor, or Financial Advisor. Trustworthy, articulate, respectful.
+            - STRUCTURE: Clear, complete sentences.
+          `;
+      } else {
+          // TIER 2: CASUAL (General Consumer/Mom) - DEFAULT
+          toneInstruction = `
+            LANGUAGE STYLE: Casual but Polite Indonesian (Standard Social Media).
+            - USE: "Aku/Kamu" (Friendly) or neutral phrasing.
+            - AVOID: "Gue/Lo" (Too rough) AND "Anda" (Too stiff/distance).
+            - PARTICLES: "ya", "yuk", "lho", "kok".
+            - VIBE: Friendly neighbor or Mom blogger sharing a tip. Warm and inviting.
+          `;
+      }
   } else {
-      toneInstruction = `
-        LANGUAGE STYLE: Native Social Media English (TikTok/IG/Reddit).
-        - FORBIDDEN WORDS (Marketing Speak): "Discover", "Unlock", "Unleash", "Solution", "Introducing", "Revolutionary", "Elevate", "Game-changer".
-        - VIBE: Authentic, raw, slightly imperfect. Like a Reddit thread title or a tweet.
-        - STRUCTURE: Short, punchy lines. "In Media Res" storytelling.
-      `;
+      // ENGLISH TIERS
+      if (register.includes("Street/Slang")) {
+          toneInstruction = `LANGUAGE STYLE: Gen-Z / TikTok Native English. Use slang (fr, ong, lowkey).`;
+      } else if (register.includes("Formal/Professional")) {
+           toneInstruction = `LANGUAGE STYLE: Professional, Corporate, or Medical English. Use 'You', no slang.`;
+      } else {
+           toneInstruction = `
+            LANGUAGE STYLE: Native Social Media English (TikTok/IG/Reddit).
+            - VIBE: Authentic, raw, slightly imperfect. Like a Reddit thread title or a tweet.
+            - STRUCTURE: Short, punchy lines. "In Media Res" storytelling.
+           `;
+      }
   }
 
   // --- 3. FORMAT SPECIFIC RULES ---
@@ -232,7 +262,7 @@ export const generateAdCopy = async (
     4. **THE "ANTI-AD" FILTER:** Would a real person post this? If no, rewrite it.
     5. **MECHANISM RULE (CRITICAL):** If the input Insight/Angle contains a technical term (e.g. 'Bio-Lock Protocol' or 'Subconscious Relational Code'), DO NOT USE IT AS THE HEADLINE. 
        - The Headline MUST be the BENEFIT (e.g., 'Lock In Moisture Forever' or 'Fix Your Relationship Code').
-       - Translate the technical jargon into street-smart English (or Indonesian).
+       - Translate the technical jargon into street-smart language.
     
     ${toneInstruction}
     ${formatRule}

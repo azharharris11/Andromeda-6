@@ -1,6 +1,6 @@
 
 import { Type } from "@google/genai";
-import { ProjectContext, GenResult, StoryOption, BigIdeaOption, MechanismOption, HVCOOption, MafiaOffer } from "../../types";
+import { ProjectContext, GenResult, StoryOption, BigIdeaOption, MechanismOption, HVCOOption, MafiaOffer, LanguageRegister } from "../../types";
 import { ai, extractJSON } from "./client";
 
 export const auditHeadlineSabri = async (headline: string, audience: string): Promise<string> => {
@@ -143,15 +143,29 @@ export const generateMechanisms = async (project: ProjectContext, bigIdea: BigId
   const model = "gemini-2.5-flash";
   const country = project.targetCountry || "USA";
   const isIndo = country.toLowerCase().includes("indonesia");
+  const register = project.languageRegister || LanguageRegister.CASUAL;
 
   let languageInstruction = "";
   if (isIndo) {
-      languageInstruction = `
-      LANGUAGE: Indonesian (Casual/Conversational). 
-      - The 'scientificPseudo' can be in English if it sounds cooler/more authoritative (e.g. "Bio-Lock Technology").
-      - BUT, the 'ump' and 'ums' explanations MUST be in Indonesian.
-      - Use natural phrasing like "Masalahnya bukan di X, tapi di Y".
-      `;
+      if (register.includes("Formal/Professional")) {
+          languageInstruction = `
+            LANGUAGE: Indonesian (Formal/Professional).
+            - Use "Anda".
+            - Explain UMP/UMS clearly and logically.
+            - Scientific Pseudo name should sound medical/authoritative.
+          `;
+      } else if (register.includes("Street/Slang")) {
+          languageInstruction = `
+            LANGUAGE: Indonesian (Casual/Slang).
+            - Use "Lo/Gue" or "Kita".
+            - Explain in simple terms.
+          `;
+      } else {
+          languageInstruction = `
+            LANGUAGE: Indonesian (Casual/Conversational). 
+            - Use natural phrasing like "Masalahnya bukan di X, tapi di Y".
+          `;
+      }
   } else {
       languageInstruction = `LANGUAGE: Native English (USA/UK).`;
   }
@@ -211,18 +225,34 @@ export const generateHooks = async (project: ProjectContext, bigIdea: BigIdeaOpt
   const model = "gemini-2.5-flash";
   const country = project.targetCountry || "USA";
   const isIndo = country.toLowerCase().includes("indonesia");
+  const register = project.languageRegister || LanguageRegister.CASUAL;
 
   let toneInstruction = "";
   let referenceMedia = "Cosmopolitan, National Enquirer";
   
   if (isIndo) {
-      toneInstruction = `
-      LANGUAGE: Bahasa Indonesia (Bahasa Gaul / Social Media Slang).
-      - FORBIDDEN: "Anda", "Temukan", "Kami".
-      - USE: "Gue/Lo" (if fits brand), "Sumpah", "Ternyata", "Ini dia".
-      - STYLE: Clickbait titles like "Tribun News", "Detik", or viral TikTok captions.
-      `;
-      referenceMedia = "Lambe Turah, Tribun News Clickbait, Viral TikToks";
+      if (register.includes("Street/Slang")) {
+          toneInstruction = `
+          LANGUAGE: Bahasa Indonesia (Bahasa Gaul / Social Media Slang).
+          - USE: "Gue/Lo", "Sumpah", "Ternyata", "Ini dia".
+          - STYLE: Clickbait titles like "Tribun News", "Detik", or viral TikTok captions.
+          `;
+          referenceMedia = "Lambe Turah, Tribun News Clickbait, Viral TikToks";
+      } else if (register.includes("Formal/Professional")) {
+          toneInstruction = `
+          LANGUAGE: Bahasa Indonesia (Formal/Professional).
+          - USE: "Anda", "Tahukah Anda", "Fakta Medis".
+          - STYLE: Trusted News, Medical Journal Headlines.
+          `;
+          referenceMedia = "Kompas, CNBC Indonesia, Medical Journals";
+      } else {
+          toneInstruction = `
+          LANGUAGE: Bahasa Indonesia (Casual Polite).
+          - USE: "Aku/Kamu", "Ternyata", "Wajib Tahu".
+          - STYLE: Lifestyle Magazine, Mom Blog.
+          `;
+          referenceMedia = "Femina, Lifestyle Blogs";
+      }
   } else {
       toneInstruction = `LANGUAGE: Native English (Casual, Punchy).`;
   }
@@ -246,7 +276,8 @@ export const generateHooks = async (project: ProjectContext, bigIdea: BigIdeaOpt
 
     BAD HOOK: "Here is how to lose weight."
     GOOD HOOK (English): "The '3-Second Morning Ritual' Doctors Are Begging You To Stop Using."
-    GOOD HOOK (Indo): "Sumpah nyesel banget baru tau trik 3 detik ini sekarang."
+    GOOD HOOK (Indo Slang): "Sumpah nyesel banget baru tau trik 3 detik ini sekarang."
+    GOOD HOOK (Indo Formal): "Peringatan Medis: Hindari kebiasaan pagi ini jika Anda berusia 40+."
     
     Output a simple JSON string array.
   `;

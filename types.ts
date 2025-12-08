@@ -99,6 +99,12 @@ export enum CopyFramework {
   STORY = 'Storytelling / Hero\'s Journey'
 }
 
+export enum LanguageRegister {
+  SLANG = 'Street/Slang (Gue/Lo) - Gen Z/Lifestyle',
+  CASUAL = 'Casual/Polite (Aku/Kamu) - General Wellness/Mom',
+  PROFESSIONAL = 'Formal/Professional (Anda/Saya) - B2B/Luxury/Medical'
+}
+
 export enum TestingTier {
   TIER_1 = 'TIER 1: Concept Isolation (High Budget)',
   TIER_2 = 'TIER 2: Persona Isolation (Mid Budget)',
@@ -223,6 +229,7 @@ export interface ProjectContext {
   targetCountry?: string; 
   brandVoice?: string;
   brandVoiceOptions?: string[]; 
+  languageRegister?: LanguageRegister;
   
   brandCopyExamples?: string; 
 
