@@ -127,7 +127,7 @@ const App = () => {
     updateNode(nodeId, { isLoading: true, description: "Regenerating visual..." });
 
     try {
-        const personaName = node.meta?.personaName || "User";
+        const persona = node.meta || { name: "User" }; 
         const angle = node.meta?.angle || node.title;
         const visualScene = node.meta?.visualScene || node.meta?.styleContext || ""; 
         const visualStyle = node.meta?.visualStyle || "";
@@ -135,7 +135,7 @@ const App = () => {
         const format = node.format as CreativeFormat;
 
         const imgResult = await generateCreativeImage(
-            project, personaName, angle, format, 
+            project, persona, angle, format, 
             visualScene, visualStyle, technicalPrompt, 
             aspectRatio
         );
@@ -161,8 +161,7 @@ const App = () => {
 
     updateNode(parentNodeId, { isLoading: true });
 
-    // --- LOGIC UPGRADE: MAFIA OFFER INJECTION ---
-    // If the parent node has a generated Mafia Offer, use it instead of the generic project offer.
+    // --- MAFIA OFFER INJECTION ---
     let offerContext = project.offer;
     if (parentNode.mafiaOffer) {
         const mo = parentNode.mafiaOffer;
@@ -181,17 +180,41 @@ const App = () => {
 
     const newNodes: NodeData[] = [];
     
+    // --- LOGIC FIX: CONNECTING THE DOTS (CONTEXT ENRICHMENT) ---
+    // We construct a "Rich Angle" string that contains the Headline + The Strategy Behind It.
+    // This ensures the AI Visualizer understands the "Why" and "How", not just the "What".
+    
     let angleToUse = parentNode.title;
-    if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) angleToUse = parentNode.hookData;
-    else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) angleToUse = parentNode.bigIdeaData.headline;
-    else if (parentNode.type === NodeType.MECHANISM_NODE && parentNode.mechanismData) angleToUse = parentNode.mechanismData.scientificPseudo;
-    else if (parentNode.type === NodeType.HVCO_NODE && parentNode.hvcoData) angleToUse = parentNode.hvcoData.title;
+    let deepContext = "";
 
-    const personaToUse = parentNode.meta?.personaName || "Story Protagonist";
+    if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
+        const mech = parentNode.mechanismData?.scientificPseudo ? `(Mechanism: ${parentNode.mechanismData.scientificPseudo})` : '';
+        angleToUse = parentNode.hookData;
+        deepContext = ` [STRATEGY CONTEXT: This hook matches the Mechanism "${parentNode.mechanismData?.scientificPseudo}" which works by "${parentNode.mechanismData?.ums}". Visual should reflect this logic.]`;
+
+    } else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) {
+        angleToUse = parentNode.bigIdeaData.headline;
+        deepContext = ` [STRATEGY CONTEXT: The Big Idea Concept is "${parentNode.bigIdeaData.concept}". We are shifting the user's belief from "${parentNode.bigIdeaData.targetBelief}". Visual must prove this shift.]`;
+
+    } else if (parentNode.type === NodeType.MECHANISM_NODE && parentNode.mechanismData) {
+        angleToUse = parentNode.mechanismData.scientificPseudo;
+        deepContext = ` [STRATEGY CONTEXT: Mechanism Name: "${parentNode.mechanismData.scientificPseudo}". HOW IT WORKS (UMS): ${parentNode.mechanismData.ums}. WHY OLD WAY FAILED (UMP): ${parentNode.mechanismData.ump}. Visual must show this unique mechanism in action.]`;
+
+    } else if (parentNode.type === NodeType.STORY_NODE && parentNode.storyData) {
+        angleToUse = parentNode.storyData.title;
+        deepContext = ` [STRATEGY CONTEXT: Narrative: "${parentNode.storyData.narrative}". Core Emotion: ${parentNode.storyData.emotionalTheme}. Visual must be raw and authentic to this story.]`;
+
+    } else if (parentNode.type === NodeType.HVCO_NODE && parentNode.hvcoData) {
+        angleToUse = parentNode.hvcoData.title;
+        deepContext = ` [STRATEGY CONTEXT: Lead Magnet Hook: "${parentNode.hvcoData.hook}". Format: ${parentNode.hvcoData.format}. Visual should sell the VALUE of this free info.]`;
+    }
+
+    // Combine for the Prompt
+    const fullPromptAngle = angleToUse + deepContext;
+
+    // --- PERSIST FULL PERSONA CONTEXT ---
+    const personaToUse = parentNode.meta || { name: "General Audience", profile: "Unknown" };
     const isHVCOFlow = parentNode.type === NodeType.HVCO_NODE;
-
-    // Use parent meta if available, otherwise fall back to name only. This preserves Deep Psychology data.
-    const personaMeta = parentNode.meta || { name: personaToUse };
 
     formats.forEach((format, index) => {
       const row = Math.floor(index / COLUMNS);
@@ -210,8 +233,8 @@ const App = () => {
         y: startY + (row * ROW_SPACING),
         stage: CampaignStage.TESTING,
         meta: { 
-            personaName: personaToUse, 
-            angle: angleToUse, 
+            ...personaToUse, 
+            angle: fullPromptAngle, // Save the Rich Angle in meta for consistency 
         }
       };
       newNodes.push(nodeData);
@@ -235,7 +258,8 @@ const App = () => {
 
             if (!isHookSource && !isShortcut) {
                  updateNode(node.id, { description: "Art Director: Defining visual style..." });
-                 const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, angleToUse, fmt);
+                 
+                 const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
                  accumulatedInput += conceptResult.inputTokens;
                  accumulatedOutput += conceptResult.outputTokens;
                  visualConcept = conceptResult.data;
@@ -243,7 +267,7 @@ const App = () => {
                  updateNode(node.id, { description: "Copywriter: Drafting..." });
                  const copyResult = await generateAdCopy(
                      projectContextForGen, 
-                     personaMeta, 
+                     personaToUse, 
                      visualConcept, 
                      fmt, 
                      isHVCOFlow, 
@@ -266,14 +290,15 @@ const App = () => {
                     };
                  } else {
                      updateNode(node.id, { description: "Copywriter: Drafting (Shortcut)..." });
-                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, angleToUse, fmt);
+                     
+                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
                      accumulatedInput += conceptResult.inputTokens;
                      accumulatedOutput += conceptResult.outputTokens;
                      visualConcept = conceptResult.data;
                      
                      const copyResult = await generateAdCopy(
                          projectContextForGen, 
-                         personaMeta, 
+                         personaToUse, 
                          visualConcept, 
                          fmt, 
                          isHVCOFlow, 
@@ -286,7 +311,7 @@ const App = () => {
 
                  if (!visualConcept.visualScene) {
                      updateNode(node.id, { description: "Art Director: Visualizing..." });
-                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, angleToUse, fmt);
+                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
                      accumulatedInput += conceptResult.inputTokens;
                      accumulatedOutput += conceptResult.outputTokens;
                      visualConcept = conceptResult.data;
@@ -304,8 +329,9 @@ const App = () => {
                 targetAspectRatio = "9:16";
             }
 
+            // Pass Full Rich Angle to Image Gen (It helps the AI, Image Service will clean it for text overlays)
             const imgResult = await generateCreativeImage(
-                projectContextForGen, personaToUse, angleToUse, fmt, 
+                projectContextForGen, personaToUse, fullPromptAngle, fmt, 
                 visualConcept.visualScene, visualConcept.visualStyle, visualConcept.technicalPrompt, targetAspectRatio
             );
             
@@ -325,7 +351,7 @@ const App = () => {
             
             if (isCarousel) {
                 const slidesResult = await generateCarouselSlides(
-                    projectContextForGen, fmt, angleToUse, visualConcept.visualScene, visualConcept.visualStyle, visualConcept.technicalPrompt
+                    projectContextForGen, fmt, fullPromptAngle, visualConcept.visualScene, visualConcept.visualStyle, visualConcept.technicalPrompt, personaToUse
                 );
                 accumulatedInput += slidesResult.inputTokens;
                 accumulatedOutput += slidesResult.outputTokens;
@@ -414,8 +440,10 @@ const App = () => {
               id: newNodeId, type: NodeType.ANGLE, parentId: nodeId,
               title: a.headline, description: `Hook: ${a.painPoint}`,
               x: parentNode.x + HORIZONTAL_GAP, y: startY + (index * VERTICAL_SPACING),
-              meta: { ...a, personaName: pMeta.name }, stage: CampaignStage.TESTING,
-              testingTier: a.testingTier, // NEW
+              // MERGE: Persona Data + Angle Data
+              meta: { ...pMeta, ...a }, 
+              stage: CampaignStage.TESTING,
+              testingTier: a.testingTier,
               inputTokens: result.inputTokens / 3,
               outputTokens: result.outputTokens / 3,
               estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
@@ -428,7 +456,6 @@ const App = () => {
 
     if (action === 'generate_hvco') {
         const pMeta = parentNode.meta || {};
-        // Find best pain point to use: visceral symptom > motivation > deep fear
         const painPoint = (pMeta.visceralSymptoms && pMeta.visceralSymptoms[0]) || pMeta.motivation || "Generic Pain";
         
         updateNode(nodeId, { isLoading: true });
@@ -452,7 +479,7 @@ const App = () => {
                     y: startY + (index * VERTICAL_SPACING),
                     hvcoData: hvco,
                     stage: CampaignStage.TESTING,
-                    meta: { personaName: pMeta.name },
+                    meta: { ...pMeta, hvcoTitle: hvco.title }, // Preserve Persona
                     inputTokens: result.inputTokens / 3,
                     outputTokens: result.outputTokens / 3,
                     estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
@@ -502,6 +529,7 @@ const App = () => {
                     x: parentNode.x + HORIZONTAL_GAP,
                     y: startY + (index * VERTICAL_SPACING),
                     storyData: story, 
+                    meta: parentNode.meta, // Propagate Parent Meta
                     stage: CampaignStage.TESTING,
                     inputTokens: result.inputTokens / 3,
                     outputTokens: result.outputTokens / 3,
@@ -536,6 +564,7 @@ const App = () => {
                     y: startY + (index * VERTICAL_SPACING),
                     storyData: story, 
                     bigIdeaData: idea, 
+                    meta: parentNode.meta, // Propagate Parent Meta
                     stage: CampaignStage.TESTING,
                     inputTokens: result.inputTokens / 3,
                     outputTokens: result.outputTokens / 3,
@@ -571,6 +600,7 @@ const App = () => {
                     storyData: parentNode.storyData,
                     bigIdeaData: bigIdea,
                     mechanismData: mech, 
+                    meta: parentNode.meta, // Propagate Parent Meta
                     stage: CampaignStage.TESTING,
                     inputTokens: result.inputTokens / 3,
                     outputTokens: result.outputTokens / 3,
@@ -609,6 +639,7 @@ const App = () => {
                     bigIdeaData: bigIdea,
                     mechanismData: mechanism,
                     hookData: hook, 
+                    meta: parentNode.meta, // Propagate Parent Meta
                     stage: CampaignStage.TESTING,
                     inputTokens: result.inputTokens / 5,
                     outputTokens: result.outputTokens / 5,

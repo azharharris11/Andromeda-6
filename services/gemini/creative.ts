@@ -45,7 +45,7 @@ export const generateSalesLetter = async (
 
 export const generateCreativeConcept = async (
   project: ProjectContext, 
-  personaName: string, 
+  persona: any, 
   angle: string, 
   format: CreativeFormat
 ): Promise<GenResult<CreativeConcept>> => {
@@ -62,6 +62,10 @@ export const generateCreativeConcept = async (
       awarenessInstruction = `AWARENESS: HIGH. Focus on URGENCY and OFFER.`;
   }
 
+  // Extract detailed persona info if available
+  const personaIdentity = persona.profile || persona.name || "User";
+  const personaPain = persona.visceralSymptoms ? persona.visceralSymptoms.join(", ") : "General frustration";
+
   const prompt = `
     # Role: Creative Director (The Pattern Interrupt Specialist)
 
@@ -77,6 +81,11 @@ export const generateCreativeConcept = async (
     Format: ${format}
     Context: ${project.targetCountry}
     ${awarenessInstruction}
+    
+    **PERSONA CONTEXT (CRITICAL):**
+    Who: ${personaIdentity}
+    Pain: ${personaPain}
+    *Ensure the visual scene reflects THIS specific person's life, environment, and struggles. Do not hallucinate a generic model.*
     
     **CRITICAL FOR FORMAT '${format}':**
     *   If 'Long Text' or 'Story' or 'IG Story Text Overlay': You MUST describe a vertical, candid, authentic shot.
@@ -152,6 +161,7 @@ export const generateAdCopy = async (
   const deepPsychologyContext = `
     TARGET PERSONA:
     - Identity: ${persona.name}
+    - Profile: ${persona.profile || 'General Audience'}
     - Pain Points/Visceral Symptoms: "${(persona.visceralSymptoms || []).join('", "')}"
     - Deep Fear: "${persona.deepFear || 'Failure'}"
     - Motivation: "${persona.motivation || 'Relief'}"
@@ -220,6 +230,9 @@ export const generateAdCopy = async (
     2. **MICRO-BLOG FORMAT:** Short lines. Lots of white space. No heavy paragraphs.
     3. **NATIVE CONTENT:** If the visual is a meme, write a meme caption. If it's a story, write a story.
     4. **THE "ANTI-AD" FILTER:** Would a real person post this? If no, rewrite it.
+    5. **MECHANISM RULE (CRITICAL):** If the input Insight/Angle contains a technical term (e.g. 'Bio-Lock Protocol' or 'Subconscious Relational Code'), DO NOT USE IT AS THE HEADLINE. 
+       - The Headline MUST be the BENEFIT (e.g., 'Lock In Moisture Forever' or 'Fix Your Relationship Code').
+       - Translate the technical jargon into street-smart English (or Indonesian).
     
     ${toneInstruction}
     ${formatRule}
@@ -230,7 +243,7 @@ export const generateAdCopy = async (
     **OUTPUT JSON:**
     {
       "primaryText": "The caption. (Use emojis naturally 🧵👇)",
-      "headline": "The image headline (Max 7 words, punchy)",
+      "headline": "The image headline (Max 7 words, punchy, benefit-driven)",
       "cta": "Button text (e.g. 'More Info', 'Download', 'Learn More')"
     }
   `;
