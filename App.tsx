@@ -7,7 +7,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ConfigModal from './components/ConfigModal';
 import FormatSelector from './components/FormatSelector';
-import { NodeType, NodeData, Edge, ProjectContext, CreativeFormat, CampaignStage, ViewMode, FunnelStage, MarketAwareness, CopyFramework } from './types';
+import { NodeType, NodeData, Edge, ProjectContext, CreativeFormat, CampaignStage, ViewMode, FunnelStage, MarketAwareness, CopyFramework, LanguageRegister } from './types';
 import { generatePersonas, generateAngles, generateCreativeImage, generateAdCopy, generateCarouselSlides, generateCreativeConcept, checkAdCompliance, analyzeLandingPageContext, analyzeImageContext, generateStoryResearch, generateBigIdeas, generateMechanisms, generateHooks, generateSalesLetter, predictCreativePerformance, generateHVCOIdeas } from './services/geminiService';
 
 const INITIAL_PROJECT: ProjectContext = {
@@ -21,7 +21,8 @@ const INITIAL_PROJECT: ProjectContext = {
   marketAwareness: MarketAwareness.PROBLEM_AWARE,
   copyFramework: CopyFramework.PAS,
   offer: "Buy 2 Get 1 Free",
-  offerOptions: ["Buy 2 Get 1 Free", "50% Off First Order", "Free Shipping Worldwide", "Bundle & Save 30%", "$10 Welcome Coupon"]
+  offerOptions: ["Buy 2 Get 1 Free", "50% Off First Order", "Free Shipping Worldwide", "Bundle & Save 30%", "$10 Welcome Coupon"],
+  languageRegister: LanguageRegister.CASUAL
 };
 
 // --- SABRI SUBY'S 3 OCEANS STRATEGY ---
@@ -190,7 +191,7 @@ const App = () => {
     if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
         const mech = parentNode.mechanismData?.scientificPseudo ? `(Mechanism: ${parentNode.mechanismData.scientificPseudo})` : '';
         angleToUse = parentNode.hookData;
-        deepContext = ` [STRATEGY CONTEXT: This hook matches the Mechanism "${parentNode.mechanismData?.scientificPseudo}" which works by "${parentNode.mechanismData?.ums}". Visual should reflect this logic.]`;
+        deepContext = ` [STRATEGY CONTEXT: This hook matches the Mechanism "${parentNode.mechanismData?.scientificPseudo}" which works by "${parentNode.mechanismData?.ums}". Visual must show this logic.]`;
 
     } else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) {
         angleToUse = parentNode.bigIdeaData.headline;
@@ -269,6 +270,7 @@ const App = () => {
                      projectContextForGen, 
                      personaToUse, 
                      visualConcept, 
+                     fullPromptAngle, // PASS THE FULL STRATEGY CONTEXT
                      fmt, 
                      isHVCOFlow, 
                      parentNode.mechanismData
@@ -299,7 +301,8 @@ const App = () => {
                      const copyResult = await generateAdCopy(
                          projectContextForGen, 
                          personaToUse, 
-                         visualConcept, 
+                         visualConcept,
+                         fullPromptAngle, // PASS THE FULL STRATEGY CONTEXT
                          fmt, 
                          isHVCOFlow, 
                          parentNode.mechanismData

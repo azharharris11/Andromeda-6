@@ -149,6 +149,7 @@ export const generateAdCopy = async (
   project: ProjectContext, 
   persona: any, 
   concept: CreativeConcept,
+  angle: string,
   format?: CreativeFormat,
   isHVCOFlow: boolean = false,
   mechanism?: MechanismOption
@@ -251,6 +252,10 @@ export const generateAdCopy = async (
     Offer: ${project.offer}
     ${deepPsychologyContext}
     
+    **INPUT STRATEGY:**
+    Core Angle/Hook: "${angle}"
+    Creative Strategy Note: "${concept.copyAngle}"
+    
     **VISUAL CONTEXT:**
     The user sees: "${concept.visualScene}"
     Rationale: "${concept.congruenceRationale}"
@@ -260,9 +265,12 @@ export const generateAdCopy = async (
     2. **MICRO-BLOG FORMAT:** Short lines. Lots of white space. No heavy paragraphs.
     3. **NATIVE CONTENT:** If the visual is a meme, write a meme caption. If it's a story, write a story.
     4. **THE "ANTI-AD" FILTER:** Would a real person post this? If no, rewrite it.
-    5. **MECHANISM RULE (CRITICAL):** If the input Insight/Angle contains a technical term (e.g. 'Bio-Lock Protocol' or 'Subconscious Relational Code'), DO NOT USE IT AS THE HEADLINE. 
-       - The Headline MUST be the BENEFIT (e.g., 'Lock In Moisture Forever' or 'Fix Your Relationship Code').
-       - Translate the technical jargon into street-smart language.
+    5. **MECHANISM RULE (CRITICAL):** 
+       - If the Input Strategy contains a Technical Mechanism Name (like 'Bio-Lock Protocol' or 'Subconscious Relational Code')...
+       - **DO NOT USE IT AS THE HEADLINE.**
+       - You MUST translate it into a simple Human Benefit.
+       - Bad: "Activate your Subconscious Relational Code."
+       - Good: "Why you keep attracting the wrong men."
     
     ${toneInstruction}
     ${formatRule}
