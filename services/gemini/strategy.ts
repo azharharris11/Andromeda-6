@@ -3,6 +3,21 @@ import { Type } from "@google/genai";
 import { ProjectContext, GenResult, StoryOption, BigIdeaOption, MechanismOption, HVCOOption, MafiaOffer, LanguageRegister } from "../../types";
 import { ai, extractJSON } from "./client";
 
+// Shared Helper (Duplicate logic for now to keep files independent, or import from utils if available)
+const getLanguageInstruction = (country: string, register: LanguageRegister): string => {
+    const isIndo = country?.toLowerCase().includes("indonesia");
+    
+    if (!isIndo) return `LANGUAGE: Native language of ${country} (e.g., English for USA).`;
+
+    if (register === LanguageRegister.SLANG) {
+        return `LANGUAGE: Bahasa Indonesia (Gaul/Slang). Use 'Gue/Lo', 'Banget', 'Valid'.`;
+    } else if (register === LanguageRegister.PROFESSIONAL) {
+        return `LANGUAGE: Bahasa Indonesia (Formal). Use 'Anda', 'Solusi'.`;
+    } else {
+        return `LANGUAGE: Bahasa Indonesia (Casual). Use 'Aku/Kamu'.`;
+    }
+};
+
 export const auditHeadlineSabri = async (headline: string, audience: string): Promise<string> => {
   const model = "gemini-2.5-flash";
   const prompt = `
@@ -31,6 +46,8 @@ export const auditHeadlineSabri = async (headline: string, audience: string): Pr
 
 export const generateMafiaOffer = async (project: ProjectContext): Promise<GenResult<MafiaOffer>> => {
   const model = "gemini-2.5-flash";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
   
   const prompt = `
     ROLE: Sabri Suby (Offer Architect).
@@ -53,9 +70,11 @@ export const generateMafiaOffer = async (project: ProjectContext): Promise<GenRe
     Boring: "Hire our agency."
     Mafia: "We will double your leads in 90 days or we work for FREE until we do. Plus, get our $2k Audit Script as a bonus."
     
+    ${langInstruction}
+
     OUTPUT JSON:
     {
-        "headline": "The 1-Sentence Mafia Hook",
+        "headline": "The 1-Sentence Mafia Hook (In Target Language)",
         "valueStack": ["Bonus 1 ($Val)", "Bonus 2 ($Val)", "Bonus 3 ($Val)"],
         "riskReversal": "The 'Sleep Like A Baby' Guarantee",
         "scarcity": "Why it expires soon"
@@ -89,6 +108,9 @@ export const generateMafiaOffer = async (project: ProjectContext): Promise<GenRe
 
 export const generateBigIdeas = async (project: ProjectContext, story: StoryOption): Promise<GenResult<BigIdeaOption[]>> => {
   const model = "gemini-2.5-flash";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
+
   const prompt = `
     ROLE: Direct Response Strategist (Big Idea Developer)
     
@@ -104,6 +126,9 @@ export const generateBigIdeas = async (project: ProjectContext, story: StoryOpti
     Story: "I diet but don't lose weight."
     Big Idea: "It's not your willpower, it's your gut biome diversity." (Shift blame -> New mechanism).
     
+    ${langInstruction}
+    **CRITICAL: Write the 'Headline', 'Concept', and 'TargetBelief' in the Target Language.**
+
     OUTPUT JSON:
     - headline: The Big Idea Statement.
     - concept: Explanation of the shift.
@@ -141,34 +166,8 @@ export const generateBigIdeas = async (project: ProjectContext, story: StoryOpti
 
 export const generateMechanisms = async (project: ProjectContext, bigIdea: BigIdeaOption): Promise<GenResult<MechanismOption[]>> => {
   const model = "gemini-2.5-flash";
-  const country = project.targetCountry || "USA";
-  const isIndo = country.toLowerCase().includes("indonesia");
   const register = project.languageRegister || LanguageRegister.CASUAL;
-
-  let languageInstruction = "";
-  if (isIndo) {
-      if (register.includes("Formal/Professional")) {
-          languageInstruction = `
-            LANGUAGE: Indonesian (Formal/Professional).
-            - Use "Anda".
-            - Explain UMP/UMS clearly and logically.
-            - Scientific Pseudo name should sound medical/authoritative.
-          `;
-      } else if (register.includes("Street/Slang")) {
-          languageInstruction = `
-            LANGUAGE: Indonesian (Casual/Slang).
-            - Use "Lo/Gue" or "Kita".
-            - Explain in simple terms.
-          `;
-      } else {
-          languageInstruction = `
-            LANGUAGE: Indonesian (Casual/Conversational). 
-            - Use natural phrasing like "Masalahnya bukan di X, tapi di Y".
-          `;
-      }
-  } else {
-      languageInstruction = `LANGUAGE: Native English (USA/UK).`;
-  }
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
 
   const prompt = `
     ROLE: Product Engineer / Pseudo-Scientist
@@ -176,8 +175,8 @@ export const generateMechanisms = async (project: ProjectContext, bigIdea: BigId
     CONTEXT:
     Big Idea: ${bigIdea.headline}
     Product: ${project.productName}
-    Target Audience Location: ${country}
-    ${languageInstruction}
+    
+    ${langInstruction}
     
     TASK:
     Define the UMP (Unique Mechanism of Problem) and UMS (Unique Mechanism of Solution).
@@ -186,10 +185,12 @@ export const generateMechanisms = async (project: ProjectContext, bigIdea: BigId
     1. UMP: Why have other methods failed? (e.g., "Standard diets slow down your metabolic rate.")
     2. UMS: How does THIS product solve that specific UMP? (e.g., "We trigger thermogenesis without caffeine.")
     
+    **CRITICAL: The 'Scientific Pseudo Name' can sound global/English if it sounds more authoritative (e.g. 'Bio-Lock Protocol'), BUT the explanations (UMP/UMS) MUST be in the Target Language.**
+    
     OUTPUT JSON (3 Variants):
-    - ump: The Root Cause of failure.
-    - ums: The New Solution mechanism.
-    - scientificPseudo: A catchy name for the mechanism (e.g., "The Dual-Action Protocol").
+    - ump: The Root Cause of failure (In Target Language).
+    - ums: The New Solution mechanism (In Target Language).
+    - scientificPseudo: A catchy name for the mechanism.
   `;
 
   const response = await ai.models.generateContent({
@@ -223,39 +224,8 @@ export const generateMechanisms = async (project: ProjectContext, bigIdea: BigId
 
 export const generateHooks = async (project: ProjectContext, bigIdea: BigIdeaOption, mechanism: MechanismOption): Promise<GenResult<string[]>> => {
   const model = "gemini-2.5-flash";
-  const country = project.targetCountry || "USA";
-  const isIndo = country.toLowerCase().includes("indonesia");
   const register = project.languageRegister || LanguageRegister.CASUAL;
-
-  let toneInstruction = "";
-  let referenceMedia = "Cosmopolitan, National Enquirer";
-  
-  if (isIndo) {
-      if (register.includes("Street/Slang")) {
-          toneInstruction = `
-          LANGUAGE: Bahasa Indonesia (Bahasa Gaul / Social Media Slang).
-          - USE: "Gue/Lo", "Sumpah", "Ternyata", "Ini dia".
-          - STYLE: Clickbait titles like "Tribun News", "Detik", or viral TikTok captions.
-          `;
-          referenceMedia = "Lambe Turah, Tribun News Clickbait, Viral TikToks";
-      } else if (register.includes("Formal/Professional")) {
-          toneInstruction = `
-          LANGUAGE: Bahasa Indonesia (Formal/Professional).
-          - USE: "Anda", "Tahukah Anda", "Fakta Medis".
-          - STYLE: Trusted News, Medical Journal Headlines.
-          `;
-          referenceMedia = "Kompas, CNBC Indonesia, Medical Journals";
-      } else {
-          toneInstruction = `
-          LANGUAGE: Bahasa Indonesia (Casual Polite).
-          - USE: "Aku/Kamu", "Ternyata", "Wajib Tahu".
-          - STYLE: Lifestyle Magazine, Mom Blog.
-          `;
-          referenceMedia = "Femina, Lifestyle Blogs";
-      }
-  } else {
-      toneInstruction = `LANGUAGE: Native English (Casual, Punchy).`;
-  }
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
   
   const prompt = `
     ROLE: Viral Social Media Editor / Direct Response Copywriter.
@@ -264,15 +234,14 @@ export const generateHooks = async (project: ProjectContext, bigIdea: BigIdeaOpt
     Big Idea: ${bigIdea.headline}
     Mechanism: ${mechanism.scientificPseudo} (${mechanism.ums})
     
-    REFERENCE STYLE: ${referenceMedia}
-    
+    ${langInstruction}
+    **CRITICAL: Write the hooks in the Target Language.**
+
     RULES:
     1. Use "Shock & Awe".
     2. Be Specific (Use Odd Numbers).
     3. Call out the "Enemy" or a "Hidden Danger".
     4. TONE: Urgent, slightly controversial, "Trashy but Irresistible".
-    
-    ${toneInstruction}
 
     BAD HOOK: "Here is how to lose weight."
     GOOD HOOK (English): "The '3-Second Morning Ritual' Doctors Are Begging You To Stop Using."
@@ -303,7 +272,8 @@ export const generateHooks = async (project: ProjectContext, bigIdea: BigIdeaOpt
 
 export const generateAngles = async (project: ProjectContext, personaName: string, personaMotivation: string): Promise<GenResult<any[]>> => {
   const model = "gemini-2.5-flash";
-  const country = project.targetCountry || "USA";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
 
   // SYSTEM: Andromeda Strategy (Tier Selection & Prioritization)
   const prompt = `
@@ -313,7 +283,7 @@ export const generateAngles = async (project: ProjectContext, personaName: strin
     Product: ${project.productName}
     Persona: ${personaName}
     Deep Motivation: ${personaMotivation}
-    Target Country: ${country}
+    Target Country: ${project.targetCountry}
     
     TASK:
     Brainstorm 10 raw angles/hooks using these specific psychological frames:
@@ -327,10 +297,11 @@ export const generateAngles = async (project: ProjectContext, personaName: strin
     - TIER 2 (Persona Isolation): Specifically tailored to this persona's fear/desire.
     - TIER 3 (Sprint Isolation): A simple iteration or direct offer.
     
+    ${langInstruction}
+    **CRITICAL: Write the 'headline' and 'hook' and 'painPoint' in the Target Language.**
+    
     OUTPUT:
     Return ONLY the Top 3 High-Potential Insights (Ensure at least 1 is a NEGATIVE ANGLE).
-    
-    *Language Rule for ${country}: Write the 'headline' and 'hook' in the local language (e.g. Bahasa Indonesia for Indonesia) using natural marketing slang.*
   `;
 
   const response = await ai.models.generateContent({
@@ -364,6 +335,9 @@ export const generateAngles = async (project: ProjectContext, personaName: strin
 
 export const generateHVCOIdeas = async (project: ProjectContext, painPoint: string): Promise<GenResult<HVCOOption[]>> => {
   const model = "gemini-2.5-flash";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
+
   const prompt = `
     ROLE: Sabri Suby (Strategy).
     
@@ -382,6 +356,9 @@ export const generateHVCOIdeas = async (project: ProjectContext, painPoint: stri
     2. Must be a "Mechanism" (e.g., The 3-Step System, The Checklist).
     3. Format: PDF Guide, Cheat Sheet, or Video Training.
     
+    ${langInstruction}
+    **CRITICAL: Write the 'title' and 'hook' in the Target Language.**
+
     EXAMPLE:
     Product: SEO Agency.
     HVCO: "The 17-Point SEO Death-Checklist That Google Doesn't Want You To Know."

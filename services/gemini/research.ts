@@ -1,9 +1,44 @@
+
 import { Type } from "@google/genai";
-import { ProjectContext, GenResult, StoryOption } from "../../types";
+import { ProjectContext, GenResult, StoryOption, LanguageRegister } from "../../types";
 import { ai, extractJSON } from "./client";
+
+// Helper for consistent language instruction
+const getLanguageInstruction = (country: string, register: LanguageRegister): string => {
+    const isIndo = country?.toLowerCase().includes("indonesia");
+    
+    if (!isIndo) return `LANGUAGE: Native language of ${country} (e.g., English for USA).`;
+
+    if (register === LanguageRegister.SLANG) {
+        return `
+        LANGUAGE: Bahasa Indonesia (Gaul / Anak Jaksel / Twitter Speak).
+        - STYLE: Informal, raw, emotional.
+        - KEYWORDS: Gue/Lo, Banget, Sumpah, Jujurly, Valid.
+        - TONE: Like a viral thread on Twitter or a Curhat session.
+        `;
+    } else if (register === LanguageRegister.PROFESSIONAL) {
+        return `
+        LANGUAGE: Bahasa Indonesia (Formal / Professional).
+        - STYLE: Baku, structured, respectful.
+        - KEYWORDS: Anda, Saya, Mengalami, Solusi.
+        - TONE: Like a medical report or business consultation.
+        `;
+    } else {
+        // Casual (Default)
+        return `
+        LANGUAGE: Bahasa Indonesia (Casual / Conversational).
+        - STYLE: Friendly, warm, easy to read.
+        - KEYWORDS: Aku/Kamu, Ternyata, Masalahnya.
+        - TONE: Like a blog post or magazine article.
+        `;
+    }
+};
 
 export const generateStoryResearch = async (project: ProjectContext): Promise<GenResult<StoryOption[]>> => {
   const model = "gemini-2.5-flash";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
+
   const prompt = `
     ROLE: Data Miner / Reddit Researcher
     
@@ -15,6 +50,9 @@ export const generateStoryResearch = async (project: ProjectContext): Promise<Ge
     - Do NOT mention the product or solution yet. 
     - Focus on the "Bleeding Neck" pain.
     - Context: ${project.targetCountry || "General"}.
+    
+    ${langInstruction}
+    **IMPORTANT: The 'title' and 'narrative' MUST be written in the Target Language defined above.**
     
     INPUT DATA:
     Target Audience: ${project.targetAudience}
@@ -105,6 +143,8 @@ export const analyzeVoiceOfCustomer = async (rawText: string, project: ProjectCo
 
 export const generatePersonas = async (project: ProjectContext): Promise<GenResult<any[]>> => {
   const model = "gemini-2.5-flash";
+  const register = project.languageRegister || LanguageRegister.CASUAL;
+  const langInstruction = getLanguageInstruction(project.targetCountry || "USA", register);
   
   const prompt = `
     You are a Consumer Psychologist specializing in ${project.targetCountry || "the target market"}.
@@ -130,6 +170,9 @@ export const generatePersonas = async (project: ProjectContext): Promise<GenResu
     1. The Skeptic / Logic Buyer (Identity: "I am smart, I research, I don't get fooled.")
     2. The Status / Aspirer (Identity: "I want to be admired/successful/beautiful.")
     3. The Anxious / Urgent Solver (Identity: "I need safety/certainty/speed.")
+
+    ${langInstruction}
+    **CRITICAL: Write the Profile, Motivation, and Visceral Symptoms in the Target Language.**
 
     *Cultural nuance mandatory for ${project.targetCountry}.*
   `;

@@ -70,7 +70,8 @@ const generateTextInstruction = (format: CreativeFormat, angle: string, project:
             - CONTEXT: Top/Bottom Text Impact Font Meme.
             - POV: Third Person Relatable ("When you...").
             - TONE: Funny, ironic.
-            - CONTENT: Top: "WHEN YOU..." Bottom: "...${cleanAngle}".
+            - CONSTRAINT: MAX 7 WORDS TOTAL.
+            - CONTENT: Summarize "${cleanAngle}" into a punchline.
             `;
         case CreativeFormat.REMINDER_NOTIF:
         case CreativeFormat.DM_NOTIFICATION:
@@ -90,7 +91,7 @@ const generateTextInstruction = (format: CreativeFormat, angle: string, project:
             - CONTENT: 2-3 bubbles. "Does this actually work?", "Yes! I tried it for ${cleanAngle} and it's crazy."
             `;
         default:
-            return `TEXT COPY INSTRUCTION: Include the text "${cleanAngle}" clearly in the image.`;
+            return `TEXT COPY INSTRUCTION: Include the text "${cleanAngle}" clearly in the image. Keep it SHORT (max 5 words).`;
     }
 };
 
@@ -491,23 +492,28 @@ export const generateCarouselSlides = async (
 
     // Use clean angle for text overlays, full angle for image generation logic
     const cleanAngle = angle.split('[')[0].trim();
+    
+    // --- LOGIC FIX: Extract Mechanism/Story Context ---
+    // The 'angle' string contains the [STRATEGY CONTEXT: ...] block.
+    // We need to pass this specific logic to Slide 2 and 3 so they aren't generic.
+    const strategyContext = angle.includes('STRATEGY CONTEXT:') ? angle.split('STRATEGY CONTEXT:')[1].replace(']', '') : cleanAngle;
 
     for (let i = 1; i <= 3; i++) {
         let slidePrompt = "";
         
         if (format === CreativeFormat.CAROUSEL_REAL_STORY) {
              if (i === 1) slidePrompt = `Slide 1 (The Hook): A candid, slightly imperfect UGC-style photo showing the PROBLEM or PAIN POINT. The subject looks frustrated or tired. Context: ${cleanAngle}. Style: Handheld camera.`;
-             if (i === 2) slidePrompt = `Slide 2 (The Turn): The SAME subject discovers ${project.productName}. A close up shot of the product/service in use. Natural lighting.`;
-             if (i === 3) slidePrompt = `Slide 3 (The Result): The SAME subject looks relieved and happy. A glowing transformation result. Text overlay implied: "Saved my life".`;
+             if (i === 2) slidePrompt = `Slide 2 (The Turn): The SAME subject discovers ${project.productName}. SHOW THE MECHANISM IN ACTION: "${strategyContext}". A close up shot of the process. Natural lighting.`;
+             if (i === 3) slidePrompt = `Slide 3 (The Result): The SAME subject looks relieved and happy. A glowing transformation result matching the story. Text overlay implied: "Saved my life".`;
         } 
         else if (format === CreativeFormat.CAROUSEL_EDUCATIONAL) {
              if (i === 1) slidePrompt = `Slide 1 (Title Card): Minimalist background with plenty of negative space for text. Visual icon representing the topic: ${cleanAngle}.`;
-             if (i === 2) slidePrompt = `Slide 2 (The Method): A diagram or clear photo demonstrating the 'How To' aspect of the solution. Keep style consistent.`;
+             if (i === 2) slidePrompt = `Slide 2 (The Method): A diagram or clear photo demonstrating this specific mechanism: "${strategyContext}". Keep style consistent.`;
              if (i === 3) slidePrompt = `Slide 3 (Summary): A checklist visual or a final result shot showing success.`;
         }
         else {
             if (i === 1) slidePrompt = `${technicalPrompt}. Slide 1: The Hook/Problem. High tension visual.`;
-            if (i === 2) slidePrompt = `${technicalPrompt}. Slide 2: The Solution/Process. Detailed macro shot. Keep visual identity.`;
+            if (i === 2) slidePrompt = `${technicalPrompt}. Slide 2: The Mechanism/Process. Visualize: ${strategyContext}. Detailed macro shot. Keep visual identity.`;
             if (i === 3) slidePrompt = `${technicalPrompt}. Slide 3: The Result/CTA. Happy resolution.`;
         }
 

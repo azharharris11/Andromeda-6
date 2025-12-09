@@ -272,6 +272,13 @@ export const generateAdCopy = async (
        - BAD: "Introducing the Bio-Lock Protocol."
        - GOOD: "How to finally stop the bloating cycle."
        - Only mention the mechanism name deep in the caption/body, never the hook.
+    6. **STORYTELLING RULE:**
+       - If the Input Strategy says "Story about...", DO NOT use the story Title as the headline.
+       - Start the caption *IN MEDIA RES* (Middle of the action).
+       - E.g. Input: "Story about Shame". Output Headline: "I Cried At The ATM Today."
+    7. **BIG IDEA RULE:**
+       - If the Input Strategy says "The Shift:...", write a 'Pattern Interrupt' statement.
+       - Challenge the status quo. "Stop doing X, Start doing Y."
     
     ${toneInstruction}
     ${formatRule}

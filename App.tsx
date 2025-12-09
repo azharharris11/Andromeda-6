@@ -1,767 +1,530 @@
-
-import React, { useState, useRef } from 'react';
-import { HashRouter } from 'react-router-dom';
-import Canvas, { CanvasHandle } from './components/Canvas';
-import Inspector from './components/Inspector';
+import React, { useState, useRef, useEffect } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
+import Canvas, { CanvasHandle } from './components/Canvas';
+import Inspector from './components/Inspector';
 import ConfigModal from './components/ConfigModal';
 import FormatSelector from './components/FormatSelector';
-import { NodeType, NodeData, Edge, ProjectContext, CreativeFormat, CampaignStage, ViewMode, FunnelStage, MarketAwareness, CopyFramework, LanguageRegister } from './types';
-import { generatePersonas, generateAngles, generateCreativeImage, generateAdCopy, generateCarouselSlides, generateCreativeConcept, checkAdCompliance, analyzeLandingPageContext, analyzeImageContext, generateStoryResearch, generateBigIdeas, generateMechanisms, generateHooks, generateSalesLetter, predictCreativePerformance, generateHVCOIdeas } from './services/geminiService';
+import Node from './components/Node';
 
-const INITIAL_PROJECT: ProjectContext = {
-  productName: "Zenith Focus Gummies",
-  productDescription: "Nootropic gummies for focus and memory without the caffeine crash.",
-  targetAudience: "Students, Programmers, and Creatives.",
+import { 
+  NodeData, Edge, NodeType, ViewMode, ProjectContext, 
+  CreativeFormat, CampaignStage, MarketAwareness, 
+  LanguageRegister, FunnelStage, CopyFramework, TestingTier,
+  StoryOption, BigIdeaOption, MechanismOption, HVCOOption 
+} from './types';
+
+import * as GeminiService from './services/geminiService';
+
+// Initial Data
+const initialProject: ProjectContext = {
+  productName: "Lumina",
+  productDescription: "A smart sleep mask that uses light therapy to improve sleep quality.",
+  targetAudience: "Insomniacs and biohackers",
   targetCountry: "USA",
-  brandVoice: "Witty, Smart, but Approachable",
-  brandVoiceOptions: ["Witty, Smart, but Approachable", "Professional & Scientific", "Gen-Z & Meme-Friendly", "Minimalist & Zen", "High-Energy & Aggressive"],
-  funnelStage: FunnelStage.TOF,
   marketAwareness: MarketAwareness.PROBLEM_AWARE,
-  copyFramework: CopyFramework.PAS,
-  offer: "Buy 2 Get 1 Free",
-  offerOptions: ["Buy 2 Get 1 Free", "50% Off First Order", "Free Shipping Worldwide", "Bundle & Save 30%", "$10 Welcome Coupon"],
+  funnelStage: FunnelStage.TOF,
   languageRegister: LanguageRegister.CASUAL
 };
 
-// --- SABRI SUBY'S 3 OCEANS STRATEGY ---
-const STRATEGIC_GROUPS: Record<string, CreativeFormat[]> = {
-  "🔵 Pattern Interrupt (Stop the Scroll)": [
-    CreativeFormat.MEME,              
-    CreativeFormat.UGLY_VISUAL,       
-    CreativeFormat.REDDIT_THREAD,     
-    CreativeFormat.TWITTER_REPOST, 
-    CreativeFormat.OLD_ME_VS_NEW_ME, 
-    CreativeFormat.PRESS_FEATURE,    
-    CreativeFormat.MS_PAINT,          
+const initialNodes: NodeData[] = [
+  {
+    id: 'root-1',
+    type: NodeType.ROOT,
+    title: 'Campaign Root',
+    description: 'Start here. Define your product strategy.',
+    x: 100,
+    y: 300
+  }
+];
+
+const FORMAT_GROUPS: Record<string, CreativeFormat[]> = {
+  "🔵 TOF (Unaware/Viral)": [
+    CreativeFormat.UGLY_VISUAL,
+    CreativeFormat.REDDIT_THREAD,
+    CreativeFormat.TWITTER_REPOST,
+    CreativeFormat.MEME,
+    CreativeFormat.MS_PAINT,
+    CreativeFormat.STORY_POLL,
+    CreativeFormat.STORY_QNA,
+    CreativeFormat.PHONE_NOTES,
     CreativeFormat.HANDHELD_TWEET,
-    CreativeFormat.EDUCATIONAL_RANT 
+    CreativeFormat.REMINDER_NOTIF
   ],
-
-  "🟠 Education & Social Proof (Build Trust)": [
-    CreativeFormat.IG_STORY_TEXT, // NEW: Native Story
-    CreativeFormat.VENN_DIAGRAM,         
+  "🟠 MOF (Education/Trust)": [
+    CreativeFormat.CAROUSEL_EDUCATIONAL,
+    CreativeFormat.CAROUSEL_REAL_STORY,
+    CreativeFormat.IG_STORY_TEXT,
+    CreativeFormat.BEFORE_AFTER,
+    CreativeFormat.US_VS_THEM,
+    CreativeFormat.VENN_DIAGRAM,
+    CreativeFormat.MECHANISM_XRAY,
+    CreativeFormat.EDUCATIONAL_RANT,
+    CreativeFormat.CHAT_CONVERSATION,
+    CreativeFormat.SOCIAL_COMMENT_STACK
+  ],
+  "🔴 BOF (Conversion/Offer)": [
+    CreativeFormat.CAROUSEL_TESTIMONIAL,
+    CreativeFormat.PRESS_FEATURE,
+    CreativeFormat.BENEFIT_POINTERS,
+    CreativeFormat.STICKY_NOTE_REALISM,
     CreativeFormat.TESTIMONIAL_HIGHLIGHT,
-    CreativeFormat.LEAD_MAGNET_3D, // NEW: Sabri HVCO
-    CreativeFormat.MECHANISM_XRAY, // NEW: Scientific/Medical
-    CreativeFormat.CAROUSEL_EDUCATIONAL, 
-    CreativeFormat.CAROUSEL_REAL_STORY,  
-    CreativeFormat.US_VS_THEM,           
-    CreativeFormat.GRAPH_CHART,          
-    CreativeFormat.STORY_QNA,            
+    CreativeFormat.LEAD_MAGNET_3D,
     CreativeFormat.UGC_MIRROR,
-    CreativeFormat.BEFORE_AFTER
-  ],
-
-  "🔴 High Conversion (Kill the Objection)": [
-    CreativeFormat.BENEFIT_POINTERS,     
-    CreativeFormat.STICKY_NOTE_REALISM,  
-    CreativeFormat.REMINDER_NOTIF,       
-    CreativeFormat.DM_NOTIFICATION,      
-    CreativeFormat.SEARCH_BAR,           
-    CreativeFormat.ANNOTATED_PRODUCT,
-    CreativeFormat.CAROUSEL_TESTIMONIAL
+    CreativeFormat.DM_NOTIFICATION
   ]
 };
 
-const App = () => {
-  const [project, setProject] = useState<ProjectContext>(INITIAL_PROJECT);
-  const [activeView, setActiveView] = useState<ViewMode>('LAB');
-  
-  const [nodes, setNodes] = useState<NodeData[]>([
-    {
-      id: 'root',
-      type: NodeType.ROOT,
-      title: INITIAL_PROJECT.productName,
-      description: INITIAL_PROJECT.productDescription,
-      x: 0,
-      y: 0,
-      stage: CampaignStage.TESTING
-    }
-  ]);
+const App: React.FC = () => {
+  const [nodes, setNodes] = useState<NodeData[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>([]);
-  const [isConfigOpen, setIsConfigOpen] = useState(true);
-  const [simulating, setSimulating] = useState(false);
+  const [project, setProject] = useState<ProjectContext>(initialProject);
+  const [activeView, setActiveView] = useState<ViewMode>('LAB');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [isFormatModalOpen, setIsFormatModalOpen] = useState(false);
-  const [targetNodeIdForFormat, setTargetNodeIdForFormat] = useState<string | null>(null);
-  const [selectedFormats, setSelectedFormats] = useState<Set<CreativeFormat>>(new Set());
+  const [inspectorNodeId, setInspectorNodeId] = useState<string | null>(null);
   
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isFormatSelectorOpen, setIsFormatSelectorOpen] = useState(false);
+  const [pendingFormatParentId, setPendingFormatParentId] = useState<string | null>(null);
+  const [selectedFormats, setSelectedFormats] = useState<Set<CreativeFormat>>(new Set());
+
+  const [simulating, setSimulating] = useState(false);
+
   const canvasRef = useRef<CanvasHandle>(null);
 
-  const labNodes = nodes.filter(n => n.stage === CampaignStage.TESTING || n.isGhost);
-  const labEdges = edges.filter(e => {
-      const source = nodes.find(n => n.id === e.source);
-      const target = nodes.find(n => n.id === e.target);
-      return (source?.stage === CampaignStage.TESTING || source?.isGhost) && 
-             (target?.stage === CampaignStage.TESTING || target?.isGhost);
-  });
-  const vaultNodes = nodes.filter(n => n.stage === CampaignStage.SCALING);
-  const selectedNode = nodes.find(n => n.id === selectedNodeId);
+  const addNode = (node: NodeData, parentId?: string) => {
+      setNodes(prev => [...prev, node]);
+      if (parentId) {
+          const edge: Edge = {
+              id: uuidv4(),
+              source: parentId,
+              target: node.id
+          };
+          setEdges(prev => [...prev, edge]);
+      }
+      return node;
+  };
 
-  const addNode = (node: NodeData) => { setNodes(prev => [...prev, node]); };
-  const addEdge = (source: string, target: string) => { setEdges(prev => [...prev, { id: `${source}-${target}`, source, target }]); };
-  const updateNode = (id: string, updates: Partial<NodeData>) => { setNodes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n)); };
+  const handleUpdateNode = (id: string, updates: Partial<NodeData>) => {
+      setNodes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
+  };
+
+  const handleNodeAction = async (action: string, nodeId: string, optionId?: string) => {
+      const node = nodes.find(n => n.id === nodeId);
+      if (!node) return;
+
+      // Handle Basic Expansion
+      if (action === 'expand_personas') {
+          handleUpdateNode(nodeId, { isLoading: true });
+          const result = await GeminiService.generatePersonas(project);
+          handleUpdateNode(nodeId, { isLoading: false, outputTokens: (node.outputTokens || 0) + result.outputTokens });
+          
+          if (result.data) {
+              result.data.forEach((p: any, i: number) => {
+                  addNode({
+                      id: uuidv4(),
+                      type: NodeType.PERSONA,
+                      title: p.name,
+                      description: p.profile,
+                      meta: p, // contains visceralSymptoms, etc.
+                      x: node.x + 400,
+                      y: node.y + (i - 1) * 250,
+                      parentId: nodeId,
+                      inputTokens: result.inputTokens
+                  }, nodeId);
+              });
+          }
+      }
+
+      // Handle Story Flow (Megaprompt)
+      if (action === 'start_story_flow') {
+          handleUpdateNode(nodeId, { isLoading: true });
+          const result = await GeminiService.generateStoryResearch(project);
+          handleUpdateNode(nodeId, { isLoading: false });
+          
+          if (result.data) {
+              result.data.forEach((story: StoryOption, i: number) => {
+                  addNode({
+                      id: uuidv4(),
+                      type: NodeType.STORY_NODE,
+                      title: story.title,
+                      description: story.narrative,
+                      storyData: story,
+                      x: node.x + 400,
+                      y: node.y + (i - 1) * 300,
+                      parentId: nodeId
+                  }, nodeId);
+              });
+          }
+      }
+
+      if (action === 'generate_big_ideas' && node.storyData) {
+          handleUpdateNode(nodeId, { isLoading: true });
+          const result = await GeminiService.generateBigIdeas(project, node.storyData);
+          handleUpdateNode(nodeId, { isLoading: false });
+          
+          if (result.data) {
+              result.data.forEach((idea: BigIdeaOption, i: number) => {
+                  addNode({
+                      id: uuidv4(),
+                      type: NodeType.BIG_IDEA_NODE,
+                      title: idea.headline,
+                      description: idea.concept,
+                      bigIdeaData: idea,
+                      storyData: node.storyData, // Pass down
+                      x: node.x + 400,
+                      y: node.y + (i - 1) * 300,
+                      parentId: nodeId
+                  }, nodeId);
+              });
+          }
+      }
+
+      if (action === 'generate_mechanisms' && node.bigIdeaData) {
+          handleUpdateNode(nodeId, { isLoading: true });
+          const result = await GeminiService.generateMechanisms(project, node.bigIdeaData);
+          handleUpdateNode(nodeId, { isLoading: false });
+          
+          if (result.data) {
+              result.data.forEach((mech: MechanismOption, i: number) => {
+                  addNode({
+                      id: uuidv4(),
+                      type: NodeType.MECHANISM_NODE,
+                      title: mech.scientificPseudo,
+                      description: `UMP: ${mech.ump} | UMS: ${mech.ums}`,
+                      mechanismData: mech,
+                      bigIdeaData: node.bigIdeaData, // Pass down
+                      storyData: node.storyData, // Pass down
+                      x: node.x + 400,
+                      y: node.y + (i - 1) * 300,
+                      parentId: nodeId
+                  }, nodeId);
+              });
+          }
+      }
+
+      if (action === 'generate_hooks' && node.mechanismData && node.bigIdeaData) {
+           handleUpdateNode(nodeId, { isLoading: true });
+           const result = await GeminiService.generateHooks(project, node.bigIdeaData, node.mechanismData);
+           handleUpdateNode(nodeId, { isLoading: false });
+
+           if (result.data) {
+               result.data.forEach((hook: string, i: number) => {
+                   addNode({
+                       id: uuidv4(),
+                       type: NodeType.HOOK_NODE,
+                       title: "Viral Hook",
+                       description: hook,
+                       hookData: hook,
+                       mechanismData: node.mechanismData,
+                       bigIdeaData: node.bigIdeaData,
+                       storyData: node.storyData,
+                       x: node.x + 400,
+                       y: node.y + (i - 2) * 150, // tighter packing
+                       parentId: nodeId
+                   }, nodeId);
+               });
+           }
+      }
+
+      // Handle Angles Expansion
+      if (action === 'expand_angles' && node.meta) {
+          handleUpdateNode(nodeId, { isLoading: true });
+          const result = await GeminiService.generateAngles(project, node.title, node.meta.motivation);
+          handleUpdateNode(nodeId, { isLoading: false });
+          
+          if (result.data) {
+              result.data.forEach((a: any, i: number) => {
+                  addNode({
+                      id: uuidv4(),
+                      type: NodeType.ANGLE,
+                      title: a.headline,
+                      description: `${a.testingTier}: ${a.hook}`,
+                      meta: { ...node.meta, angle: a.hook, ...a }, // Inherit persona meta
+                      testingTier: a.testingTier,
+                      x: node.x + 400,
+                      y: node.y + (i - 1) * 250,
+                      parentId: nodeId
+                  }, nodeId);
+              });
+          }
+      }
+      
+      // Handle HVCO
+      if (action === 'generate_hvco' && node.meta) {
+           handleUpdateNode(nodeId, { isLoading: true });
+           const pain = node.meta.visceralSymptoms?.[0] || "General Pain";
+           const result = await GeminiService.generateHVCOIdeas(project, pain);
+           handleUpdateNode(nodeId, { isLoading: false });
+           
+           if (result.data) {
+               result.data.forEach((hvco: HVCOOption, i: number) => {
+                   addNode({
+                       id: uuidv4(),
+                       type: NodeType.HVCO_NODE,
+                       title: hvco.title,
+                       description: hvco.hook,
+                       hvcoData: hvco,
+                       meta: node.meta, // Inherit Persona
+                       x: node.x + 400,
+                       y: node.y + (i - 1) * 200,
+                       parentId: nodeId
+                   }, nodeId);
+               });
+           }
+      }
+
+      // Handle Creative Generation (Opening Selector)
+      if (action === 'generate_creatives' || action === 'open_format_selector') {
+          setPendingFormatParentId(nodeId);
+          setIsFormatSelectorOpen(true);
+      }
+      
+      // Handle Promotion
+      if (action === 'promote_creative') {
+          handleUpdateNode(nodeId, { stage: CampaignStage.SCALING, isWinning: true });
+      }
+  };
+
+  const handleGenerateCreatives = async () => {
+      if (!pendingFormatParentId) return;
+      const parentNode = nodes.find(n => n.id === pendingFormatParentId);
+      if (!parentNode) return;
+
+      setIsFormatSelectorOpen(false);
+      handleUpdateNode(pendingFormatParentId, { isLoading: true });
+      
+      const personaMeta = parentNode.meta || {}; 
+
+      const formatsToGen = Array.from(selectedFormats) as CreativeFormat[];
+      let verticalOffset = 0;
+
+      // --- LOGIC FOR CONTEXT EXTRACTION ---
+      let angleToUse = parentNode.title;
+      let deepContext = "";
+      
+      if (parentNode.type === NodeType.ANGLE && parentNode.meta?.hook) {
+          angleToUse = parentNode.meta.hook;
+      } else if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
+          // --- SURGICAL FIX: HOOK VISUAL CONTEXT ---
+          angleToUse = parentNode.hookData;
+          const visualCheatSheet = parentNode.mechanismData?.ums || "Show the problem vividly";
+          
+          deepContext = ` [STRATEGY CONTEXT: The Hook is "${parentNode.hookData}". BUT the visual must depict THIS ACTION: "${visualCheatSheet}". Do not just visualize the text of the hook, visualize the ACTION behind it.]`;
+      
+      } else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) {
+          angleToUse = parentNode.bigIdeaData.headline;
+          deepContext = ` [STRATEGY CONTEXT: The Big Idea is "${parentNode.bigIdeaData.headline}". Concept: ${parentNode.bigIdeaData.concept}. Target Belief Shift: ${parentNode.bigIdeaData.targetBelief}]`;
+      } else if (parentNode.type === NodeType.MECHANISM_NODE && parentNode.mechanismData) {
+          angleToUse = parentNode.mechanismData.scientificPseudo;
+           deepContext = ` [STRATEGY CONTEXT: The Mechanism is "${parentNode.mechanismData.scientificPseudo}". UMP: ${parentNode.mechanismData.ump}. UMS: ${parentNode.mechanismData.ums}]`;
+      } else if (parentNode.type === NodeType.HVCO_NODE && parentNode.hvcoData) {
+          angleToUse = parentNode.hvcoData.title;
+          deepContext = ` [STRATEGY CONTEXT: Lead Magnet Title "${parentNode.hvcoData.title}". Hook: "${parentNode.hvcoData.hook}"]`;
+      } else if (parentNode.type === NodeType.STORY_NODE && parentNode.storyData) {
+          angleToUse = parentNode.storyData.title;
+          deepContext = ` [STRATEGY CONTEXT: Story Narrative "${parentNode.storyData.narrative}"]`;
+      }
+
+      const fullAngle = angleToUse + deepContext;
+
+      for (const fmt of formatsToGen) {
+          // 1. Concept
+          const conceptRes = await GeminiService.generateCreativeConcept(project, personaMeta, fullAngle, fmt);
+          
+          if (conceptRes.data) {
+              const concept = conceptRes.data;
+              
+              // 2. Visual
+              let imageUrl: string | null = null;
+              let carouselImages: string[] = [];
+              let imageTokens = 0;
+              
+              if (fmt.includes('Carousel')) {
+                   const slidesRes = await GeminiService.generateCarouselSlides(
+                       project, fmt, fullAngle, concept.visualScene, concept.visualStyle, concept.technicalPrompt, personaMeta
+                   );
+                   if (slidesRes.data && slidesRes.data.length > 0) {
+                       imageUrl = slidesRes.data[0];
+                       carouselImages = slidesRes.data;
+                       imageTokens = slidesRes.inputTokens + slidesRes.outputTokens;
+                   }
+              } else {
+                   const imgRes = await GeminiService.generateCreativeImage(
+                       project, personaMeta, fullAngle, fmt, concept.visualScene, concept.visualStyle, concept.technicalPrompt
+                   );
+                   imageUrl = imgRes.data;
+                   imageTokens = imgRes.inputTokens + imgRes.outputTokens;
+              }
+
+              // 3. Copy
+              const isHVCO = parentNode.type === NodeType.HVCO_NODE;
+              const copyRes = await GeminiService.generateAdCopy(
+                  project, personaMeta, concept, angleToUse, fmt, isHVCO, parentNode.mechanismData
+              );
+              
+              if (copyRes.data) {
+                   addNode({
+                       id: uuidv4(),
+                       type: NodeType.CREATIVE,
+                       title: copyRes.data.headline,
+                       description: concept.visualScene,
+                       format: fmt,
+                       imageUrl: imageUrl || undefined,
+                       carouselImages: carouselImages.length > 1 ? carouselImages : undefined,
+                       adCopy: copyRes.data,
+                       meta: { ...parentNode.meta, angle: angleToUse, concept },
+                       // Inherit megaprompt data if exists
+                       storyData: parentNode.storyData,
+                       bigIdeaData: parentNode.bigIdeaData,
+                       mechanismData: parentNode.mechanismData,
+                       
+                       x: parentNode.x + 450,
+                       y: parentNode.y + verticalOffset,
+                       parentId: parentNode.id,
+                       
+                       inputTokens: conceptRes.inputTokens + imageTokens + copyRes.inputTokens,
+                       outputTokens: conceptRes.outputTokens + copyRes.outputTokens
+                   }, parentNode.id);
+                   verticalOffset += 400;
+              }
+          }
+      }
+      
+      handleUpdateNode(pendingFormatParentId, { isLoading: false });
+      setSelectedFormats(new Set());
+      setPendingFormatParentId(null);
+  };
+
+  const handleRunSimulation = async () => {
+      setSimulating(true);
+      // Simulate by predicting all leaf creatives in LAB
+      const creatives = nodes.filter(n => n.type === NodeType.CREATIVE && n.stage !== CampaignStage.SCALING);
+      
+      for (const node of creatives) {
+           handleUpdateNode(node.id, { isLoading: true });
+           const pred = await GeminiService.predictCreativePerformance(project, node);
+           handleUpdateNode(node.id, { isLoading: false, prediction: pred.data });
+      }
+      setSimulating(false);
+  };
   
   const handleNodeMove = (id: string, x: number, y: number) => {
       setNodes(prev => prev.map(n => n.id === id ? { ...n, x, y } : n));
   };
-
-  const handleProjectUpdate = (updates: Partial<ProjectContext>) => {
-      setProject(prev => ({...prev, ...updates}));
-  };
-
-  const handleContextAnalyzed = (context: ProjectContext) => {
-      setProject(prev => ({...prev, ...context}));
-      setNodes(prev => prev.map(n => n.type === NodeType.ROOT ? {
-          ...n,
-          title: context.productName,
-          description: context.productDescription
-      } : n));
-  };
-
-  const handleRegenerateNode = async (nodeId: string, aspectRatio: string) => {
-    const node = nodes.find(n => n.id === nodeId);
-    if (!node) return;
-
-    updateNode(nodeId, { isLoading: true, description: "Regenerating visual..." });
-
-    try {
-        const persona = node.meta || { name: "User" }; 
-        const angle = node.meta?.angle || node.title;
-        const visualScene = node.meta?.visualScene || node.meta?.styleContext || ""; 
-        const visualStyle = node.meta?.visualStyle || "";
-        const technicalPrompt = node.meta?.technicalPrompt || "";
-        const format = node.format as CreativeFormat;
-
-        const imgResult = await generateCreativeImage(
-            project, persona, angle, format, 
-            visualScene, visualStyle, technicalPrompt, 
-            aspectRatio
-        );
-        
-        if (imgResult.data) {
-            updateNode(nodeId, { 
-                imageUrl: imgResult.data,
-                isLoading: false,
-                description: node.adCopy?.primaryText.slice(0, 100) + "..." || node.description
-            });
-        } else {
-            updateNode(nodeId, { isLoading: false, description: "Regeneration failed." });
-        }
-    } catch (e) {
-        console.error("Regeneration failed", e);
-        updateNode(nodeId, { isLoading: false, description: "Error during regeneration" });
-    }
-  };
-
-  const executeGeneration = async (parentNodeId: string, formats: CreativeFormat[]) => {
-    const parentNode = nodes.find(n => n.id === parentNodeId);
-    if (!parentNode) return;
-
-    updateNode(parentNodeId, { isLoading: true });
-
-    // --- MAFIA OFFER INJECTION ---
-    let offerContext = project.offer;
-    if (parentNode.mafiaOffer) {
-        const mo = parentNode.mafiaOffer;
-        offerContext = `MAFIA OFFER HEADLINE: "${mo.headline}". \nVALUE STACK: ${mo.valueStack.join(' + ')}. \nRISK REVERSAL (GUARANTEE): ${mo.riskReversal}. \nSCARCITY: ${mo.scarcity}`;
-    }
-    const projectContextForGen = { ...project, offer: offerContext };
-
-    const HORIZONTAL_GAP = 550; 
-    const COL_SPACING = 350;    
-    const ROW_SPACING = 400;    
-    const COLUMNS = 3;
-
-    const totalRows = Math.ceil(formats.length / COLUMNS);
-    const totalBlockHeight = (totalRows - 1) * ROW_SPACING;
-    const startY = parentNode.y - (totalBlockHeight / 2);
-
-    const newNodes: NodeData[] = [];
-    
-    // --- LOGIC FIX: CONNECTING THE DOTS (CONTEXT ENRICHMENT) ---
-    // We construct a "Rich Angle" string that contains the Headline + The Strategy Behind It.
-    // This ensures the AI Visualizer understands the "Why" and "How", not just the "What".
-    
-    let angleToUse = parentNode.title;
-    let deepContext = "";
-
-    if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
-        const mech = parentNode.mechanismData?.scientificPseudo ? `(Mechanism: ${parentNode.mechanismData.scientificPseudo})` : '';
-        angleToUse = parentNode.hookData;
-        deepContext = ` [STRATEGY CONTEXT: This hook matches the Mechanism "${parentNode.mechanismData?.scientificPseudo}" which works by "${parentNode.mechanismData?.ums}". Visual must show this logic.]`;
-
-    } else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) {
-        angleToUse = parentNode.bigIdeaData.headline;
-        deepContext = ` [STRATEGY CONTEXT: The Big Idea Concept is "${parentNode.bigIdeaData.concept}". We are shifting the user's belief from "${parentNode.bigIdeaData.targetBelief}". Visual must prove this shift.]`;
-
-    } else if (parentNode.type === NodeType.MECHANISM_NODE && parentNode.mechanismData) {
-        // --- SURGICAL FIX: FORCE BENEFIT-DRIVEN ANGLE ---
-        // Instead of sending the technical name ("Bio-Lock Protocol"), we send the UMS (Benefit/Solution).
-        angleToUse = `How to solve the problem using ${parentNode.mechanismData.scientificPseudo}: ${parentNode.mechanismData.ums}`;
-        deepContext = ` [STRATEGY CONTEXT: The core concept is "${parentNode.mechanismData.scientificPseudo}". BUT DO NOT USE THIS NAME AS THE HEADLINE. Focus on the explanation: ${parentNode.mechanismData.ums}. WHY OLD WAY FAILED (UMP): ${parentNode.mechanismData.ump}.]`;
-
-    } else if (parentNode.type === NodeType.STORY_NODE && parentNode.storyData) {
-        angleToUse = parentNode.storyData.title;
-        deepContext = ` [STRATEGY CONTEXT: Narrative: "${parentNode.storyData.narrative}". Core Emotion: ${parentNode.storyData.emotionalTheme}. Visual must be raw and authentic to this story.]`;
-
-    } else if (parentNode.type === NodeType.HVCO_NODE && parentNode.hvcoData) {
-        angleToUse = parentNode.hvcoData.title;
-        deepContext = ` [STRATEGY CONTEXT: Lead Magnet Hook: "${parentNode.hvcoData.hook}". Format: ${parentNode.hvcoData.format}. Visual should sell the VALUE of this free info.]`;
-    }
-
-    // Combine for the Prompt
-    const fullPromptAngle = angleToUse + deepContext;
-
-    // --- PERSIST FULL PERSONA CONTEXT ---
-    const personaToUse = parentNode.meta || { name: "General Audience", profile: "Unknown" };
-    const isHVCOFlow = parentNode.type === NodeType.HVCO_NODE;
-
-    formats.forEach((format, index) => {
-      const row = Math.floor(index / COLUMNS);
-      const col = index % COLUMNS;
+  
+  const handleRegenerateCreative = async (id: string, aspectRatio: string) => {
+      const node = nodes.find(n => n.id === id);
+      if (!node || !node.meta?.concept) return;
       
-      const newId = `creative-${Date.now()}-${index}`;
-      const nodeData: NodeData = {
-        id: newId, 
-        type: NodeType.CREATIVE, 
-        parentId: parentNodeId,
-        title: format, 
-        description: "Initializing Generation...", 
-        format: format,
-        isLoading: true, 
-        x: parentNode.x + HORIZONTAL_GAP + (col * COL_SPACING), 
-        y: startY + (row * ROW_SPACING),
-        stage: CampaignStage.TESTING,
-        meta: { 
-            ...personaToUse, 
-            angle: fullPromptAngle, // Save the Rich Angle in meta for consistency 
-        }
-      };
-      newNodes.push(nodeData);
-      addNode(nodeData);
-      addEdge(parentNodeId, newId);
-    });
-
-    for (const node of newNodes) {
-        if (newNodes.indexOf(node) > 0) await new Promise(resolve => setTimeout(resolve, 800));
-
-        try {
-            const isHookSource = parentNode.type === NodeType.HOOK_NODE;
-            const isShortcut = parentNode.type === NodeType.BIG_IDEA_NODE || parentNode.type === NodeType.MECHANISM_NODE || parentNode.type === NodeType.STORY_NODE || parentNode.type === NodeType.HVCO_NODE;
-            const fmt = node.format as CreativeFormat;
-            
-            let accumulatedInput = 0;
-            let accumulatedOutput = 0;
-            let imageCount = 0;
-            let finalAdCopy: any = {};
-            let visualConcept: any = {};
-
-            if (!isHookSource && !isShortcut) {
-                 updateNode(node.id, { description: "Art Director: Defining visual style..." });
-                 
-                 const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
-                 accumulatedInput += conceptResult.inputTokens;
-                 accumulatedOutput += conceptResult.outputTokens;
-                 visualConcept = conceptResult.data;
-
-                 updateNode(node.id, { description: "Copywriter: Drafting..." });
-                 const copyResult = await generateAdCopy(
-                     projectContextForGen, 
-                     personaToUse, 
-                     visualConcept, 
-                     fullPromptAngle, // PASS THE FULL STRATEGY CONTEXT
-                     fmt, 
-                     isHVCOFlow, 
-                     parentNode.mechanismData
-                 );
-                 accumulatedInput += copyResult.inputTokens;
-                 accumulatedOutput += copyResult.outputTokens;
-                 finalAdCopy = copyResult.data;
-            } else {
-                 if (isHookSource && parentNode.storyData && parentNode.bigIdeaData && parentNode.mechanismData && parentNode.hookData) {
-                    updateNode(node.id, { description: "Writing Caption..." });
-                    const letterResult = await generateSalesLetter(projectContextForGen, parentNode.storyData, parentNode.bigIdeaData, parentNode.mechanismData, parentNode.hookData);
-                    accumulatedInput += letterResult.inputTokens;
-                    accumulatedOutput += letterResult.outputTokens;
-                    
-                    finalAdCopy = {
-                        headline: parentNode.hookData,
-                        primaryText: letterResult.data, 
-                        cta: project.offer || "Learn More"
-                    };
-                 } else {
-                     updateNode(node.id, { description: "Copywriter: Drafting (Shortcut)..." });
-                     
-                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
-                     accumulatedInput += conceptResult.inputTokens;
-                     accumulatedOutput += conceptResult.outputTokens;
-                     visualConcept = conceptResult.data;
-                     
-                     const copyResult = await generateAdCopy(
-                         projectContextForGen, 
-                         personaToUse, 
-                         visualConcept,
-                         fullPromptAngle, // PASS THE FULL STRATEGY CONTEXT
-                         fmt, 
-                         isHVCOFlow, 
-                         parentNode.mechanismData
-                     );
-                     accumulatedInput += copyResult.inputTokens;
-                     accumulatedOutput += copyResult.outputTokens;
-                     finalAdCopy = copyResult.data;
-                 }
-
-                 if (!visualConcept.visualScene) {
-                     updateNode(node.id, { description: "Art Director: Visualizing..." });
-                     const conceptResult = await generateCreativeConcept(projectContextForGen, personaToUse, fullPromptAngle, fmt);
-                     accumulatedInput += conceptResult.inputTokens;
-                     accumulatedOutput += conceptResult.outputTokens;
-                     visualConcept = conceptResult.data;
-                 }
-            }
-
-            const complianceStatus = await checkAdCompliance(finalAdCopy);
-            finalAdCopy.complianceNotes = complianceStatus;
-
-            updateNode(node.id, { description: "Visualizer: Rendering..." });
-            
-            // Set Aspect Ratio to VERTICAL for IG_STORY_TEXT
-            let targetAspectRatio = "1:1";
-            if (fmt === CreativeFormat.IG_STORY_TEXT || fmt === CreativeFormat.PHONE_NOTES || fmt === CreativeFormat.REELS_THUMBNAIL || fmt === CreativeFormat.HANDHELD_TWEET) {
-                targetAspectRatio = "9:16";
-            }
-
-            // Pass Full Rich Angle to Image Gen (It helps the AI, Image Service will clean it for text overlays)
-            const imgResult = await generateCreativeImage(
-                projectContextForGen, personaToUse, fullPromptAngle, fmt, 
-                visualConcept.visualScene, visualConcept.visualStyle, visualConcept.technicalPrompt, targetAspectRatio
-            );
-            
-            accumulatedInput += imgResult.inputTokens;
-            accumulatedOutput += imgResult.outputTokens;
-            const imageUrl = imgResult.data;
-            if (imageUrl) imageCount++;
-
-            let carouselImages: string[] = [];
-            const isCarousel = (
-                fmt === CreativeFormat.CAROUSEL_EDUCATIONAL ||
-                fmt === CreativeFormat.CAROUSEL_TESTIMONIAL ||
-                fmt === CreativeFormat.CAROUSEL_PANORAMA ||
-                fmt === CreativeFormat.CAROUSEL_PHOTO_DUMP ||
-                fmt === CreativeFormat.CAROUSEL_REAL_STORY 
-            );
-            
-            if (isCarousel) {
-                const slidesResult = await generateCarouselSlides(
-                    projectContextForGen, fmt, fullPromptAngle, visualConcept.visualScene, visualConcept.visualStyle, visualConcept.technicalPrompt, personaToUse
-                );
-                accumulatedInput += slidesResult.inputTokens;
-                accumulatedOutput += slidesResult.outputTokens;
-                carouselImages = slidesResult.data;
-                imageCount += carouselImages.length;
-            }
-
-            const inputCost = (accumulatedInput / 1000000) * 0.30;
-            const outputCost = (accumulatedOutput / 1000000) * 2.50;
-            const imgCost = imageCount * 0.039;
-            const totalCost = inputCost + outputCost + imgCost;
-
-            updateNode(node.id, { 
-                isLoading: false, 
-                description: finalAdCopy.primaryText.slice(0, 100) + "...",
-                imageUrl: imageUrl || undefined,
-                carouselImages: carouselImages.length > 0 ? carouselImages : undefined,
-                adCopy: finalAdCopy,
-                inputTokens: accumulatedInput,
-                outputTokens: accumulatedOutput,
-                estimatedCost: totalCost,
-                meta: { 
-                    ...node.meta, 
-                    visualScene: visualConcept.visualScene, 
-                    visualStyle: visualConcept.visualStyle, 
-                    technicalPrompt: visualConcept.technicalPrompt 
-                }, 
-                variableIsolated: visualConcept.rationale 
-            });
-        } catch (e) {
-            console.error("Error generating creative node", e);
-            updateNode(node.id, { isLoading: false, description: "Generation Failed" });
-        }
-    }
-    updateNode(parentNodeId, { isLoading: false });
-  };
-
-  const handleNodeAction = async (action: string, nodeId: string, optionId?: string) => {
-    const parentNode = nodes.find(n => n.id === nodeId);
-    if (!parentNode) return;
-
-    if (action === 'expand_personas') {
-      updateNode(nodeId, { isLoading: true });
-      try {
-          const result = await generatePersonas(project);
-          const personas = result.data;
-          
-          const HORIZONTAL_GAP = 600;
-          const VERTICAL_SPACING = 800;
-          const totalHeight = (personas.length - 1) * VERTICAL_SPACING;
-          const startY = parentNode.y - (totalHeight / 2);
-          
-          personas.forEach((p: any, index: number) => {
-            const newNodeId = `persona-${Date.now()}-${index}`;
-            addNode({
-              id: newNodeId, type: NodeType.PERSONA, parentId: nodeId,
-              title: p.name, 
-              description: `${p.profile || p.motivation}`,
-              x: parentNode.x + HORIZONTAL_GAP, y: startY + (index * VERTICAL_SPACING),
-              meta: p, stage: CampaignStage.TESTING,
-              inputTokens: result.inputTokens / 3, 
-              outputTokens: result.outputTokens / 3,
-              estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-            });
-            addEdge(nodeId, newNodeId);
-          });
-      } catch (e) { alert("Quota exceeded."); }
-      updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'expand_angles') {
-      updateNode(nodeId, { isLoading: true });
-      try {
-          const pMeta = parentNode.meta || {};
-          const result = await generateAngles(project, pMeta.name, pMeta.motivation);
-          const angles = result.data;
-          
-          const HORIZONTAL_GAP = 550;
-          const VERTICAL_SPACING = 350;
-          const totalHeight = (angles.length - 1) * VERTICAL_SPACING;
-          const startY = parentNode.y - (totalHeight / 2);
-
-          angles.forEach((a: any, index: number) => {
-            const newNodeId = `angle-${Date.now()}-${index}`;
-            addNode({
-              id: newNodeId, type: NodeType.ANGLE, parentId: nodeId,
-              title: a.headline, description: `Hook: ${a.painPoint}`,
-              x: parentNode.x + HORIZONTAL_GAP, y: startY + (index * VERTICAL_SPACING),
-              // MERGE: Persona Data + Angle Data
-              meta: { ...pMeta, ...a }, 
-              stage: CampaignStage.TESTING,
-              testingTier: a.testingTier,
-              inputTokens: result.inputTokens / 3,
-              outputTokens: result.outputTokens / 3,
-              estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-            });
-            addEdge(nodeId, newNodeId);
-          });
-      } catch (e) { alert("Quota exceeded."); }
-      updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'generate_hvco') {
-        const pMeta = parentNode.meta || {};
-        const painPoint = (pMeta.visceralSymptoms && pMeta.visceralSymptoms[0]) || pMeta.motivation || "Generic Pain";
-        
-        updateNode(nodeId, { isLoading: true });
-        try {
-            const result = await generateHVCOIdeas(project, painPoint);
-            const hvcos = result.data;
-            const HORIZONTAL_GAP = 600;
-            const VERTICAL_SPACING = 250;
-            const totalHeight = (hvcos.length - 1) * VERTICAL_SPACING;
-            const startY = parentNode.y - (totalHeight / 2);
-            
-            hvcos.forEach((hvco, index) => {
-                const newNodeId = `hvco-${Date.now()}-${index}`;
-                addNode({
-                    id: newNodeId,
-                    type: NodeType.HVCO_NODE,
-                    parentId: nodeId,
-                    title: hvco.title,
-                    description: "Lead Magnet (Blue Ocean)",
-                    x: parentNode.x + HORIZONTAL_GAP,
-                    y: startY + (index * VERTICAL_SPACING),
-                    hvcoData: hvco,
-                    stage: CampaignStage.TESTING,
-                    meta: { ...pMeta, hvcoTitle: hvco.title }, // Preserve Persona
-                    inputTokens: result.inputTokens / 3,
-                    outputTokens: result.outputTokens / 3,
-                    estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-                });
-                addEdge(nodeId, newNodeId);
-            });
-        } catch (e) { console.error(e); }
-        updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'generate_creatives') {
-      setTargetNodeIdForFormat(nodeId);
-      setIsFormatModalOpen(true);
-    }
-
-    if (action === 'promote_creative') {
-       const newId = `${nodeId}-vault`;
-       addNode({
-           ...parentNode,
-           id: newId,
-           stage: CampaignStage.SCALING,
-           x: 0, 
-           y: 0,
-           parentId: null
-       });
-       updateNode(nodeId, { isGhost: true });
-       setActiveView('VAULT');
-    }
-
-    if (action === 'start_story_flow') {
-        updateNode(nodeId, { isLoading: true });
-        try {
-            const result = await generateStoryResearch(project);
-            const stories = result.data;
-            const HORIZONTAL_GAP = 500;
-            const VERTICAL_SPACING = 400;
-            const totalHeight = (stories.length - 1) * VERTICAL_SPACING;
-            const startY = parentNode.y - (totalHeight / 2);
-            stories.forEach((story, index) => {
-                const newNodeId = `story-${Date.now()}-${index}`;
-                addNode({
-                    id: newNodeId,
-                    type: NodeType.STORY_NODE, 
-                    parentId: nodeId,
-                    title: story.title,
-                    description: "Story Phase",
-                    x: parentNode.x + HORIZONTAL_GAP,
-                    y: startY + (index * VERTICAL_SPACING),
-                    storyData: story, 
-                    meta: parentNode.meta, // Propagate Parent Meta
-                    stage: CampaignStage.TESTING,
-                    inputTokens: result.inputTokens / 3,
-                    outputTokens: result.outputTokens / 3,
-                    estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-                });
-                addEdge(nodeId, newNodeId);
-            });
-        } catch (e) { console.error(e); alert("Generation failed"); }
-        updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'generate_big_ideas') {
-        const story = parentNode.storyData;
-        if (!story) return;
-        updateNode(nodeId, { isLoading: true });
-        try {
-            const result = await generateBigIdeas(project, story);
-            const ideas = result.data;
-            const HORIZONTAL_GAP = 500;
-            const VERTICAL_SPACING = 300;
-            const totalHeight = (ideas.length - 1) * VERTICAL_SPACING;
-            const startY = parentNode.y - (totalHeight / 2);
-            ideas.forEach((idea, index) => {
-                 const newNodeId = `big-idea-${Date.now()}-${index}`;
-                 addNode({
-                    id: newNodeId,
-                    type: NodeType.BIG_IDEA_NODE, 
-                    parentId: nodeId,
-                    title: idea.headline,
-                    description: "Big Idea Phase",
-                    x: parentNode.x + HORIZONTAL_GAP,
-                    y: startY + (index * VERTICAL_SPACING),
-                    storyData: story, 
-                    bigIdeaData: idea, 
-                    meta: parentNode.meta, // Propagate Parent Meta
-                    stage: CampaignStage.TESTING,
-                    inputTokens: result.inputTokens / 3,
-                    outputTokens: result.outputTokens / 3,
-                    estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-                 });
-                 addEdge(nodeId, newNodeId);
-            });
-        } catch (e) { console.error(e); }
-        updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'generate_mechanisms') {
-        const bigIdea = parentNode.bigIdeaData;
-        if (!bigIdea) return;
-        updateNode(nodeId, { isLoading: true });
-        try {
-            const result = await generateMechanisms(project, bigIdea);
-            const mechanisms = result.data;
-            const HORIZONTAL_GAP = 500;
-            const VERTICAL_SPACING = 300;
-            const totalHeight = (mechanisms.length - 1) * VERTICAL_SPACING;
-            const startY = parentNode.y - (totalHeight / 2);
-            mechanisms.forEach((mech, index) => {
-                 const newNodeId = `mechanism-${Date.now()}-${index}`;
-                 addNode({
-                    id: newNodeId,
-                    type: NodeType.MECHANISM_NODE, 
-                    parentId: nodeId,
-                    title: mech.scientificPseudo,
-                    description: "Mechanism Phase",
-                    x: parentNode.x + HORIZONTAL_GAP,
-                    y: startY + (index * VERTICAL_SPACING),
-                    storyData: parentNode.storyData,
-                    bigIdeaData: bigIdea,
-                    mechanismData: mech, 
-                    meta: parentNode.meta, // Propagate Parent Meta
-                    stage: CampaignStage.TESTING,
-                    inputTokens: result.inputTokens / 3,
-                    outputTokens: result.outputTokens / 3,
-                    estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 3
-                 });
-                 addEdge(nodeId, newNodeId);
-            });
-        } catch (e) { console.error(e); }
-        updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'generate_hooks') {
-        const mechanism = parentNode.mechanismData;
-        if (!mechanism) return;
-        updateNode(nodeId, { isLoading: true });
-        try {
-            const bigIdea = parentNode.bigIdeaData;
-            if (!bigIdea) return; 
-            const result = await generateHooks(project, bigIdea, mechanism);
-            const hooks = result.data;
-            const HORIZONTAL_GAP = 400;
-            const VERTICAL_SPACING = 200;
-            const totalHeight = (hooks.length - 1) * VERTICAL_SPACING;
-            const startY = parentNode.y - (totalHeight / 2);
-            hooks.forEach((hook, index) => {
-                const newNodeId = `hook-${Date.now()}-${index}`;
-                addNode({
-                    id: newNodeId,
-                    type: NodeType.HOOK_NODE, 
-                    parentId: nodeId,
-                    title: "Hook Variation",
-                    description: "Hook Phase",
-                    x: parentNode.x + HORIZONTAL_GAP,
-                    y: startY + (index * VERTICAL_SPACING),
-                    storyData: parentNode.storyData,
-                    bigIdeaData: bigIdea,
-                    mechanismData: mechanism,
-                    hookData: hook, 
-                    meta: parentNode.meta, // Propagate Parent Meta
-                    stage: CampaignStage.TESTING,
-                    inputTokens: result.inputTokens / 5,
-                    outputTokens: result.outputTokens / 5,
-                    estimatedCost: ((result.inputTokens/1000000)*0.3 + (result.outputTokens/1000000)*2.5) / 5
-                });
-                addEdge(nodeId, newNodeId);
-            });
-        } catch (e) { console.error(e); }
-        updateNode(nodeId, { isLoading: false });
-    }
-
-    if (action === 'open_format_selector') {
-        setTargetNodeIdForFormat(nodeId);
-        setIsFormatModalOpen(true);
-    }
-  };
-
-  const handlePredictionAudit = async (nodeId: string) => {
-      const node = nodes.find(n => n.id === nodeId);
-      if (!node) return;
+      handleUpdateNode(id, { isLoading: true });
       
-      updateNode(nodeId, { isLoading: true });
-      const result = await predictCreativePerformance(project, node);
-      updateNode(nodeId, { isLoading: false, prediction: result.data });
+      const concept = node.meta.concept;
+      // We reuse the concept but regenerate the image
+      const imgRes = await GeminiService.generateCreativeImage(
+           project, node.meta, node.meta.angle, node.format!, 
+           concept.visualScene, concept.visualStyle, concept.technicalPrompt, aspectRatio
+      );
+      
+      handleUpdateNode(id, { isLoading: false, imageUrl: imgRes.data || node.imageUrl });
   };
 
-  const runGlobalPrediction = async () => {
-    setSimulating(true);
-    const creatives = nodes.filter(n => n.type === NodeType.CREATIVE && n.stage === CampaignStage.TESTING && !n.isGhost);
-    
-    // Batch processing
-    for (const node of creatives) {
-        if (!node.prediction) {
-            const result = await predictCreativePerformance(project, node);
-            updateNode(node.id, { prediction: result.data });
-        }
-    }
-    setSimulating(false);
-  };
-
-  const handleSelectFormat = (fmt: CreativeFormat) => {
-      const newSet = new Set(selectedFormats);
-      if (newSet.has(fmt)) newSet.delete(fmt);
-      else newSet.add(fmt);
-      setSelectedFormats(newSet);
-  };
-
-  const confirmFormatSelection = () => {
-      if (targetNodeIdForFormat && selectedFormats.size > 0) {
-          executeGeneration(targetNodeIdForFormat, Array.from(selectedFormats));
-          setIsFormatModalOpen(false);
-          setSelectedFormats(new Set());
-          setTargetNodeIdForFormat(null);
-      }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
+  const vaultNodes = nodes.filter(n => n.stage === CampaignStage.SCALING);
+  const labNodes = activeView === 'LAB' ? nodes : [];
 
   return (
-    <HashRouter>
-    <div className="w-screen h-screen bg-slate-50 flex overflow-hidden text-slate-900" onDragOver={handleDragOver} onDrop={handleDrop}>
-      <Sidebar 
-          activeView={activeView} 
-          setActiveView={setActiveView} 
-          onOpenConfig={() => setIsConfigOpen(true)} 
-      />
-      <div className="flex-1 relative">
-        <Canvas 
-          ref={canvasRef}
-          nodes={activeView === 'LAB' ? labNodes : vaultNodes}
-          edges={activeView === 'LAB' ? labEdges : []}
-          onNodeAction={handleNodeAction}
-          selectedNodeId={selectedNodeId}
-          onSelectNode={setSelectedNodeId}
-          onNodeMove={handleNodeMove}
-        />
+    <div className="flex w-full h-screen bg-slate-50 font-sans text-slate-900">
+      <Sidebar activeView={activeView} setActiveView={setActiveView} onOpenConfig={() => setIsConfigOpen(true)} />
+      
+      <div className="flex-1 relative flex flex-col overflow-hidden">
         <Header 
-            activeView={activeView}
-            labNodesCount={labNodes.length}
+            activeView={activeView} 
+            labNodesCount={nodes.length} 
             vaultNodesCount={vaultNodes.length}
             simulating={simulating}
-            onRunSimulation={runGlobalPrediction}
+            onRunSimulation={handleRunSimulation}
         />
+        
+        <div className="flex-1 relative">
+           {activeView === 'LAB' ? (
+               <Canvas 
+                   ref={canvasRef}
+                   nodes={nodes}
+                   edges={edges}
+                   onNodeAction={(action, id) => handleNodeAction(action, id)}
+                   selectedNodeId={selectedNodeId}
+                   onSelectNode={(id) => { setSelectedNodeId(id); if (id) setInspectorNodeId(id); else setInspectorNodeId(null); }}
+                   onNodeMove={handleNodeMove}
+               />
+           ) : (
+               <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto h-full">
+                   {vaultNodes.map(node => (
+                       <div key={node.id} className="relative h-[400px]">
+                           <Node 
+                               data={node} 
+                               selected={selectedNodeId === node.id} 
+                               onClick={() => { setSelectedNodeId(node.id); setInspectorNodeId(node.id); }} 
+                               onAction={handleNodeAction}
+                               isGridView={true}
+                           />
+                       </div>
+                   ))}
+                   {vaultNodes.length === 0 && (
+                       <div className="col-span-full flex flex-col items-center justify-center text-slate-400 mt-20">
+                           <p>No winning assets in the vault yet.</p>
+                           <button onClick={() => setActiveView('LAB')} className="text-blue-600 font-bold mt-2">Go to Lab</button>
+                       </div>
+                   )}
+               </div>
+           )}
+           
+           {/* Inspector Panel */}
+           {inspectorNodeId && (
+               <div className="absolute top-0 right-0 bottom-0 w-[450px] z-20">
+                   <Inspector 
+                       node={nodes.find(n => n.id === inspectorNodeId)!} 
+                       onClose={() => setInspectorNodeId(null)}
+                       onUpdate={(id, data) => handleUpdateNode(id, data)}
+                       onRegenerate={handleRegenerateCreative}
+                       onPromote={(id) => handleNodeAction('promote_creative', id)}
+                       onAnalyze={async (id) => {
+                            const node = nodes.find(n => n.id === id);
+                            if(node) {
+                                handleUpdateNode(id, { isLoading: true });
+                                const pred = await GeminiService.predictCreativePerformance(project, node);
+                                handleUpdateNode(id, { isLoading: false, prediction: pred.data });
+                            }
+                       }}
+                       project={project}
+                   />
+               </div>
+           )}
+        </div>
       </div>
-      {selectedNode && (
-          <div className="w-[400px] h-full z-30 relative">
-            <Inspector 
-                node={selectedNode} 
-                onClose={() => setSelectedNodeId(null)} 
-                onUpdate={updateNode} 
-                onRegenerate={handleRegenerateNode} 
-                onPromote={(id) => handleNodeAction('promote_creative', id)} 
-                project={project} 
-                onAnalyze={handlePredictionAudit}
-            />
-          </div>
-      )}
+
       <ConfigModal 
           isOpen={isConfigOpen} 
           onClose={() => setIsConfigOpen(false)} 
-          project={project} 
-          onUpdateProject={handleProjectUpdate}
-          onContextAnalyzed={handleContextAnalyzed}
+          project={project}
+          onUpdateProject={(updates) => setProject(prev => ({ ...prev, ...updates }))}
+          onContextAnalyzed={(context) => setProject(prev => ({ ...prev, ...context }))}
       />
+
       <FormatSelector 
-          isOpen={isFormatModalOpen}
-          onClose={() => setIsFormatModalOpen(false)}
+          isOpen={isFormatSelectorOpen}
+          onClose={() => setIsFormatSelectorOpen(false)}
           selectedFormats={selectedFormats}
-          onSelectFormat={handleSelectFormat}
-          onConfirm={confirmFormatSelection}
-          formatGroups={STRATEGIC_GROUPS}
+          onSelectFormat={(fmt) => {
+              const next = new Set(selectedFormats);
+              if (next.has(fmt)) next.delete(fmt);
+              else next.add(fmt);
+              setSelectedFormats(next);
+          }}
+          onConfirm={handleGenerateCreatives}
+          formatGroups={FORMAT_GROUPS}
       />
     </div>
-    </HashRouter>
   );
 };
 
