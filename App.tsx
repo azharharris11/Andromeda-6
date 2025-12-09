@@ -309,8 +309,16 @@ const App: React.FC = () => {
       } else if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
           // --- SURGICAL FIX: HOOK VISUAL CONTEXT ---
           angleToUse = parentNode.hookData;
+
+          // --- LOGIC FIX: Native Format Context Translation ---
+          // If format is Native (Chat, Story, Notes), tell AI to translate the context, not pass-through.
+          // Note: We need to check the format inside the loop, so here we just setup general context
+          // But since deepContext is global for the batch, we might need per-format logic.
+          // For simplicity in this structure, we pass a flexible instruction.
+          
           const visualCheatSheet = parentNode.mechanismData?.ums || "Show the problem vividly";
           
+          // We will refine deepContext inside the loop if needed, but for now we set a robust base
           deepContext = ` [STRATEGY CONTEXT: The Hook is "${parentNode.hookData}". BUT the visual must depict THIS ACTION: "${visualCheatSheet}". Do not just visualize the text of the hook, visualize the ACTION behind it.]`;
       
       } else if (parentNode.type === NodeType.BIG_IDEA_NODE && parentNode.bigIdeaData) {
@@ -327,9 +335,29 @@ const App: React.FC = () => {
           deepContext = ` [STRATEGY CONTEXT: Story Narrative "${parentNode.storyData.narrative}"]`;
       }
 
-      const fullAngle = angleToUse + deepContext;
-
       for (const fmt of formatsToGen) {
+          // --- PER-FORMAT CONTEXT REFINEMENT ---
+          let formatSpecificAngle = angleToUse;
+          let formatSpecificContext = deepContext;
+
+          if (parentNode.type === NodeType.HOOK_NODE && parentNode.hookData) {
+              const isNative = [
+                  CreativeFormat.CHAT_CONVERSATION, 
+                  CreativeFormat.IG_STORY_TEXT, 
+                  CreativeFormat.PHONE_NOTES, 
+                  CreativeFormat.REMINDER_NOTIF,
+                  CreativeFormat.DM_NOTIFICATION,
+                  CreativeFormat.STICKY_NOTE_REALISM,
+                  CreativeFormat.SOCIAL_COMMENT_STACK
+              ].includes(fmt);
+
+              if (isNative) {
+                  formatSpecificContext = ` [STRATEGY CONTEXT: The Hook is "${parentNode.hookData}". BUT THIS IS A NATIVE AD format. You MUST translate this "Marketing Hook" into a "Real Life Moment" that implies the hook is true. Don't be literal. Be authentic.]`;
+              }
+          }
+
+          const fullAngle = formatSpecificAngle + formatSpecificContext;
+
           // 1. Concept
           const conceptRes = await GeminiService.generateCreativeConcept(project, personaMeta, fullAngle, fmt);
           

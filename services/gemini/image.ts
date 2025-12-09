@@ -18,33 +18,46 @@ const generateTextInstruction = (format: CreativeFormat, angle: string, project:
     // CLEAN THE ANGLE: Remove the [STRATEGY CONTEXT: ...] part for text generation
     const cleanAngle = angle.split('[STRATEGY CONTEXT:')[0].trim();
 
+    // RULE: Detect if angle sounds "Marketing-heavy"
+    const isMarketingSpeak = /ritual|system|protocol|method|secret|mistake|warning|solution|cure|trick|hack/i.test(cleanAngle);
+    const adaptationInstruction = isMarketingSpeak 
+        ? `CRITICAL: The input "${cleanAngle}" is a Marketing Hook. You MUST translate it into casual human speech. Do NOT use the marketing terms.` 
+        : `Keep the core message of "${cleanAngle}".`;
+
     switch (format) {
         case CreativeFormat.CHAT_CONVERSATION:
             return `
             TEXT COPY INSTRUCTION:
-            - CONTEXT: A private text message between friends/partners.
+            - CONTEXT: A private text message between real friends/partners.
             - POV: Sender (Friend/Partner).
-            - TONE: Intimate, casual, slang allowed, lower case.
-            - CONTENT: Rewrite "${cleanAngle}" as a text message.
-              (e.g., Instead of "Cure Back Pain", write "Babe, my back is finally better omg.")
+            - TONE: Intimate, casual, typo-prone, lower case. STRICTLY "ANTI-AD".
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Write a text message that implies the RESULT of the hook without sounding like a salesperson.
+            - BAD: "Try this 3-step method."
+            - GOOD: "omg i finally slept for 8 hours straight last night."
+            - ${adaptationInstruction}
             `;
         case CreativeFormat.TWITTER_REPOST:
         case CreativeFormat.HANDHELD_TWEET:
             return `
             TEXT COPY INSTRUCTION:
-            - CONTEXT: A viral tweet or hot take.
+            - CONTEXT: A viral tweet from a real person (not a brand account).
             - POV: User (First Person "I").
             - TONE: Opinionated, slightly controversial, "Twitter Voice".
-            - CONTENT: Rewrite "${cleanAngle}" as a short tweet.
-              (e.g., "Unpopular opinion: [Angle] is actually true.")
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Turn this hook into a "Hot Take" or a personal realization.
+            - BAD: "Stop eating sugar to lose weight."
+            - GOOD: "Whatever you do, just stop eating sugar. Trust me."
             `;
         case CreativeFormat.PHONE_NOTES:
             return `
             TEXT COPY INSTRUCTION:
-            - CONTEXT: A personal "To-Do" list or "realization" diary in Apple Notes.
+            - CONTEXT: A personal "To-Do" list or "Journal" entry in Apple Notes.
             - POV: User (First Person "I").
             - TONE: Raw, unfiltered, bullet points.
-            - CONTENT: Title: "${cleanAngle}". Body: 3 short bullet points expanding on it.
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Write 3 short bullet points that a person would write to REMIND THEMSELVES of this hook.
+            - ${adaptationInstruction}
             `;
         case CreativeFormat.IG_STORY_TEXT:
         case CreativeFormat.LONG_TEXT:
@@ -53,16 +66,41 @@ const generateTextInstruction = (format: CreativeFormat, angle: string, project:
             - CONTEXT: Instagram Story text overlay (internal monologue).
             - POV: User (First Person "I").
             - TONE: Vulnerable, storytelling, "real talk".
-            - CONTENT: A short paragraph (2-3 sentences) reflecting on "${cleanAngle}".
-              (e.g., "I used to think X, but then I realized Y...")
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Write a short sentence reflecting on how this hook changed their life.
+            - CONSTRAINT: It must act as a "Teaser" for the link sticker.
             `;
         case CreativeFormat.STICKY_NOTE_REALISM:
             return `
             TEXT COPY INSTRUCTION:
-            - CONTEXT: A handwritten reminder to self.
-            - POV: Self.
-            - TONE: Urgent, short, imperative.
-            - CONTENT: "Don't forget: ${cleanAngle}" or "Rule #1: ${cleanAngle}".
+            - CONTEXT: Handwritten sticky note on a mirror or laptop.
+            - POV: Self-reminder.
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Summarize the hook into 3-4 handwritten words. Imperative mood.
+            - BAD: "Stop Destroying Dopamine."
+            - GOOD: "NO. MORE. SCROLLING."
+            `;
+        case CreativeFormat.REMINDER_NOTIF:
+        case CreativeFormat.DM_NOTIFICATION:
+            return `
+            TEXT COPY INSTRUCTION:
+            - CONTEXT: Smartphone Lock Screen Notification.
+            - POV: System App or 'Best Friend'.
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Translate this hook into a SHORT, URGENT REMINDER or QUESTION. Do NOT use the product name.
+            - BAD: "Reminder: Use the Focus Mask."
+            - GOOD: "Reminder: Put your phone down."
+            - GOOD: "New Message: You promised to sleep early."
+            `;
+        case CreativeFormat.SOCIAL_COMMENT_STACK:
+            return `
+            TEXT COPY INSTRUCTION:
+            - CONTEXT: Instagram/TikTok Comments Section.
+            - POV: Random Users talking to each other.
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Write 2 comments. User A asks a skeptical question. User B replies with a PERSONAL RESULT based on the hook.
+            - RULE: Replace technical terms with "my skin", "my back", "my wallet".
+            - Example: "Did this actually fix your acne?" -> "Yes, my skin is finally clear."
             `;
         case CreativeFormat.MEME:
             return `
@@ -70,25 +108,11 @@ const generateTextInstruction = (format: CreativeFormat, angle: string, project:
             - CONTEXT: Top/Bottom Text Impact Font Meme.
             - POV: Third Person Relatable ("When you...").
             - TONE: Funny, ironic.
-            - CONSTRAINT: MAX 7 WORDS TOTAL.
-            - CONTENT: Summarize "${cleanAngle}" into a punchline.
-            `;
-        case CreativeFormat.REMINDER_NOTIF:
-        case CreativeFormat.DM_NOTIFICATION:
-            return `
-            TEXT COPY INSTRUCTION:
-            - CONTEXT: System Notification or Lock Screen Alert.
-            - POV: App/System addressing User ("You").
-            - TONE: Urgent, concise.
-            - CONTENT: "Reminder: ${cleanAngle}" or "New Message: ${cleanAngle}".
-            `;
-        case CreativeFormat.SOCIAL_COMMENT_STACK:
-            return `
-            TEXT COPY INSTRUCTION:
-            - CONTEXT: Social media comments section.
-            - POV: Multiple Users.
-            - TONE: Excited, validating, curious.
-            - CONTENT: 2-3 bubbles. "Does this actually work?", "Yes! I tried it for ${cleanAngle} and it's crazy."
+            - INPUT HOOK: "${cleanAngle}"
+            - TASK: Write a funny/ironic situation related to the PROBLEM in the hook.
+            - CONSTRAINT: Do NOT use the product name. Focus on the feeling of relief or the absurdity of the old way.
+            - BAD: "WHEN YOU... Use the Sleep Mask."
+            - GOOD: "WHEN YOU... Finally wake up without neck pain."
             `;
         default:
             return `TEXT COPY INSTRUCTION: Include the text "${cleanAngle}" clearly in the image. Keep it SHORT (max 5 words).`;
@@ -351,13 +375,13 @@ export const generateCreativeImage = async (
   }
   // === AAZAR SHAD'S WINNING FORMATS ===
   else if (format === CreativeFormat.VENN_DIAGRAM) {
-      finalPrompt = `A simple, minimalist Venn Diagram graphic on a solid, clean background. Left Circle Label: "Competitors" or "Others". Right Circle Label: "${project.productName}". The Intersection (Middle) contains the key benefit: "${angle}". Style: Corporate Memphis flat design or clean line art. High contrast text. The goal is to show that ONLY this product has the winning combination. ${appliedEnhancer} ${SAFETY_GUIDELINES}`;
+      finalPrompt = `A simple, minimalist Venn Diagram graphic on a solid, clean background. Left Circle Label: "Competitors" or "Others". Right Circle Label: "${project.productName}". The Intersection (Middle) contains a 1-2 word RESULT of "${angle.split('[')[0]}" (e.g. "Instant Relief", "8h Sleep"). DO NOT write the mechanism name. Write the END STATE. Style: Corporate Memphis flat design or clean line art. High contrast text. The goal is to show that ONLY this product has the winning combination. ${appliedEnhancer} ${SAFETY_GUIDELINES}`;
   }
   else if (format === CreativeFormat.PRESS_FEATURE) {
       finalPrompt = `
         A realistic digital screenshot of an online news article.
         Header: A recognized GENERIC media logo (like 'Daily Health', 'TechInsider' - DO NOT use the product logo in the header).
-        Headline: "${angle.split('[')[0]}".
+        Headline: Write a curiosity-inducing news headline about "${angle.split('[')[0]}". (e.g., "The simple trick doctors hate", "Why this mask is going viral"). Do not just put the feature name. Make it sound like 'TechCrunch' or 'Vogue'.
         Image: High-quality candid photo of ${project.productName} embedded in the article body.
         Vibe: It must look like an editorial piece, NOT an advertisement. Trustworthy, "As seen in".
         ${appliedEnhancer} ${SAFETY_GUIDELINES}
@@ -366,7 +390,7 @@ export const generateCreativeImage = async (
   else if (format === CreativeFormat.TESTIMONIAL_HIGHLIGHT) {
       finalPrompt = `
         A close-up shot of a printed customer review or a digital review card on paper texture.
-        Text: "${angle.split('[')[0]}".
+        Text: Write a short, enthusiastic customer review sentence based on "${angle.split('[')[0]}". (e.g., "I can finally sleep!", "Best investment ever", "My husband stopped snoring").
         Key phrases are HIGHLIGHTED in bright neon yellow marker.
         Background: A messy desk or kitchen counter (Native/UGC vibe).
         IMPORTANT: NO Brand Logos overlay. Just the raw text and highlight.
@@ -408,7 +432,13 @@ export const generateCreativeImage = async (
     finalPrompt = `A high-quality product photography shot of ${project.productName}. Clean background. Sleek, modern graphic lines pointing to 3 key features. Style: "Anatomy Breakdown". ${appliedEnhancer} ${culturePrompt} ${moodPrompt} ${SAFETY_GUIDELINES}.`;
   }
   else if (format === CreativeFormat.US_VS_THEM) {
-    finalPrompt = `A split screen comparison image. Left side (Them): Cloudy, sad, messy, labeled "Them". Right side (Us): Bright, happy, organized, labeled "Us". Subject: ${project.productName}. ${appliedEnhancer} ${culturePrompt} ${SAFETY_GUIDELINES}.`;
+    const cleanAngle = angle.split('[')[0].trim();
+    finalPrompt = `
+      A split screen comparison image. 
+      Left side (Them): Visualize the SPECIFIC PAIN/STRUGGLE of "${cleanAngle}". Use gloomy lighting, chaotic composition, showing the old way failing. Labeled "Them". 
+      Right side (Us): Visualize the SPECIFIC RELIEF/RESULT of "${cleanAngle}". Use bright lighting, organized composition, showing ${project.productName} working. Labeled "Us". 
+      Subject: ${project.productName}. ${appliedEnhancer} ${culturePrompt} ${SAFETY_GUIDELINES}.
+    `;
   }
   else if (
       format === CreativeFormat.CAROUSEL_REAL_STORY || 
@@ -482,58 +512,46 @@ export const generateCarouselSlides = async (
   visualScene: string,
   visualStyle: string,
   technicalPrompt: string,
-  persona: any // Added persona
+  persona: any
 ): Promise<GenResult<string[]>> => {
-    const slides: string[] = [];
-    let totalInput = 0;
-    let totalOutput = 0;
-    
-    let anchorImage: string | undefined = undefined;
+  const slides: string[] = [];
+  let totalInputTokens = 0;
+  let totalOutputTokens = 0;
 
-    // Use clean angle for text overlays, full angle for image generation logic
-    const cleanAngle = angle.split('[')[0].trim();
-    
-    // --- LOGIC FIX: Extract Mechanism/Story Context ---
-    // The 'angle' string contains the [STRATEGY CONTEXT: ...] block.
-    // We need to pass this specific logic to Slide 2 and 3 so they aren't generic.
-    const strategyContext = angle.includes('STRATEGY CONTEXT:') ? angle.split('STRATEGY CONTEXT:')[1].replace(']', '') : cleanAngle;
+  // Define 3 slides for the carousel
+  const slideVariations = [
+    { role: "Title Slide", instruction: "This is the first slide (Hook). Focus on the problem or headline visual." },
+    { role: "Middle Slide", instruction: "This is the middle slide (Value). Show the mechanism, process, or social proof detail." },
+    { role: "End Slide", instruction: "This is the final slide (CTA). Show the result, product stack, or call to action." }
+  ];
 
-    for (let i = 1; i <= 3; i++) {
-        let slidePrompt = "";
-        
-        if (format === CreativeFormat.CAROUSEL_REAL_STORY) {
-             if (i === 1) slidePrompt = `Slide 1 (The Hook): A candid, slightly imperfect UGC-style photo showing the PROBLEM or PAIN POINT. The subject looks frustrated or tired. Context: ${cleanAngle}. Style: Handheld camera.`;
-             if (i === 2) slidePrompt = `Slide 2 (The Turn): The SAME subject discovers ${project.productName}. SHOW THE MECHANISM IN ACTION: "${strategyContext}". A close up shot of the process. Natural lighting.`;
-             if (i === 3) slidePrompt = `Slide 3 (The Result): The SAME subject looks relieved and happy. A glowing transformation result matching the story. Text overlay implied: "Saved my life".`;
-        } 
-        else if (format === CreativeFormat.CAROUSEL_EDUCATIONAL) {
-             if (i === 1) slidePrompt = `Slide 1 (Title Card): Minimalist background with plenty of negative space for text. Visual icon representing the topic: ${cleanAngle}.`;
-             if (i === 2) slidePrompt = `Slide 2 (The Method): A diagram or clear photo demonstrating this specific mechanism: "${strategyContext}". Keep style consistent.`;
-             if (i === 3) slidePrompt = `Slide 3 (Summary): A checklist visual or a final result shot showing success.`;
-        }
-        else {
-            if (i === 1) slidePrompt = `${technicalPrompt}. Slide 1: The Hook/Problem. High tension visual.`;
-            if (i === 2) slidePrompt = `${technicalPrompt}. Slide 2: The Mechanism/Process. Visualize: ${strategyContext}. Detailed macro shot. Keep visual identity.`;
-            if (i === 3) slidePrompt = `${technicalPrompt}. Slide 3: The Result/CTA. Happy resolution.`;
-        }
+  // We run them in parallel
+  const promises = slideVariations.map(v => {
+      // We modify the visual scene slightly to guide the model for each slide
+      const slideScene = `${visualScene}. [CAROUSEL CONTEXT: ${v.role} - ${v.instruction}]`;
+      return generateCreativeImage(
+          project, 
+          persona, 
+          angle, 
+          format, 
+          slideScene, 
+          visualStyle, 
+          technicalPrompt, 
+          "1:1" // Square for carousel usually
+      );
+  });
 
-        // Add character consistency text reinforcement
-        if (i > 1) {
-             slidePrompt += " IMPORTANT: MAINTAIN CHARACTER CONSISTENCY. Same subject as Slide 1. Same hair, same clothes.";
-        }
+  const results = await Promise.all(promises);
 
-        const result = await generateCreativeImage(
-            project, persona, angle, format, visualScene, visualStyle, slidePrompt, "1:1",
-            anchorImage 
-        );
-        
-        if (result.data) {
-            slides.push(result.data);
-            if (i === 1) anchorImage = result.data; 
-        }
-        totalInput += result.inputTokens;
-        totalOutput += result.outputTokens;
-    }
+  results.forEach(res => {
+      if (res.data) slides.push(res.data);
+      totalInputTokens += res.inputTokens;
+      totalOutputTokens += res.outputTokens;
+  });
 
-    return { data: slides, inputTokens: totalInput, outputTokens: totalOutput };
+  return {
+      data: slides,
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens
+  };
 };
