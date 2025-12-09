@@ -73,26 +73,60 @@ const getCulturePrompt = (country: string = "USA"): string => {
     return `Target Country: ${country}. Adapt visual cues (plugs, architecture, ethnicity) to be authentic to this region.`;
 };
 
-const getPersonaVisualContext = (persona: any): string => {
-    const age = persona.age || 25; // Default if not found
+const getPersonaVisualContext = (persona: any, angle: string): string => {
+    const age = persona.age || 25;
+    const pain = (persona.visceralSymptoms || []).join(", ");
+    
+    // MAP PAIN TO VISUAL PROPS
+    const painToVisuals: Record<string, string> = {
+        'insomnia': 'Unmade bed, blackout curtains, melatonin bottles on nightstand, phone showing 3:47 AM',
+        'sleep': 'Unmade bed, blackout curtains, melatonin bottles on nightstand, phone showing 3:47 AM',
+        'back pain': 'Heating pad on couch, pain relief cream, awkward sitting posture, lumbar pillow',
+        'acne': 'Bathroom counter cluttered with skincare products, tissue with makeup removal, mirror avoidance',
+        'skin': 'Bathroom counter cluttered with skincare products, tissue with makeup removal, mirror avoidance',
+        'anxiety': 'Bitten nails, fidgeting hands, messy notes, coffee cups everywhere',
+        'weight': 'Old gym membership card, unopened salad in fridge, scale in corner',
+        'fat': 'Old gym membership card, unopened salad in fridge, scale in corner',
+        'brain fog': 'Sticky notes everywhere, half-finished tasks, coffee addiction visible',
+        'chronic fatigue': 'Messy unmade bed, curtains closed at noon, energy drink cans',
+        'tired': 'Messy unmade bed, curtains closed at noon, energy drink cans',
+    };
+    
+    // Try to match pain to visual cues based on pain list OR angle keywords
+    let environmentalCues = "";
+    const contextText = (pain + " " + angle).toLowerCase();
+    
+    for (const [key, visual] of Object.entries(painToVisuals)) {
+        if (contextText.includes(key)) {
+            environmentalCues = `Environmental Props: ${visual}`;
+            break;
+        }
+    }
+    
+    // If no match, use generic
+    if (!environmentalCues) {
+        environmentalCues = `Environmental Props: Clutter related to "${pain}" (e.g. failed solution products, medical paperwork, messy workspace)`;
+    }
     
     let ageStyle = "";
     if (age < 26) {
-        ageStyle = "Gen Z Aesthetic: Chaos-core, flash photography, mirrors, clutter is okay, lo-fi, authentic, 'photo dump' vibe.";
+        ageStyle = `Gen Z Aesthetic: LED lights, ring light selfies, messy 'photo dump' vibe, flash photography, mirrors, posters on wall, charging cables everywhere.`;
     } else if (age < 42) {
-        ageStyle = "Millennial Aesthetic: Curated chaos, pastel tones, house plants, minimal but lived-in, 'Instagrammable' but trying to look candid.";
+        ageStyle = `Millennial Aesthetic: House plants (pothos, monstera), minimalist but lived-in, 'Instagrammable' aesthetic, clean chaos, muted tones, reusable water bottle visible.`;
     } else {
-        ageStyle = "Gen X / Boomer Aesthetic: Clear lighting, straightforward composition, focus on function, clean domestic environments, high trust.";
+        ageStyle = `Gen X / Boomer Aesthetic: Clean, functional spaces, traditional furniture, family photos on walls, organized but not trendy, good overhead lighting.`;
     }
 
     const identity = persona.profile || persona.name || "Target User";
-    const pain = (persona.visceralSymptoms || []).join(", ");
 
     return `
         PERSONA VISUAL IDENTITY:
-        - WHO: ${identity} (Approx Age: ${age}).
-        - VISUAL VIBE: ${ageStyle}
-        - PAIN CONTEXT: They are struggling with: "${pain}". Show this struggle in the environment (e.g. piles of laundry, messy desk, medicines on counter).
+        - WHO: ${identity} (Age: ${age})
+        - PAIN: "${pain}"
+        - ${environmentalCues}
+        - AESTHETIC: ${ageStyle}
+        
+        CRITICAL: The environment MUST visually communicate the pain without text.
     `;
 };
 
@@ -142,8 +176,18 @@ interface PromptContext {
 // --- 4. TEXT INSTRUCTION GENERATOR (SPECIFIC) ---
 
 const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngle, project: ProjectContext): string => {
-    const { cleanAngle, isPainFocused } = parsedAngle;
+    const { cleanAngle } = parsedAngle;
     const productContext = `${project.productName} (${project.productDescription})`;
+
+    // UNIVERSAL FORBIDDEN WORDS (Anti-Salesy)
+    const FORBIDDEN = `
+        FORBIDDEN WORDS (DO NOT USE):
+        ❌ "Buy now", "Click here", "Limited time", "Order today"
+        ❌ "Revolutionary", "Game-changer", "Life-changing" (unless ironic)
+        ❌ "${project.productName}" (Do NOT mention product name in text)
+        ❌ "Scientists", "Doctors", "Experts" (unless Press Feature format)
+        ❌ "Proven", "Guaranteed", "100%"
+    `;
 
     // Helper to inject product context
     const baseCtx = `
@@ -155,13 +199,32 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
         case CreativeFormat.CHAT_CONVERSATION:
             return `
             ${baseCtx}
+            
             TEXT COPY INSTRUCTION:
-            - CONTEXT: A private message between friends (WhatsApp/iMessage).
-            - SENDER POV: Someone who just found the solution.
-            - BAD: "You should buy this product, it has 3 features." (Salesy)
-            - GOOD: "bro i actually slept 8 hours last night wtf" (Relatable)
-            - GOOD: "why did no one tell me about this earlier 😭"
-            - RULE: Use lowercase, typos, slang (Gen Z), and emojis. Make it sound like a leaked DM.
+            - CONTEXT: Private DM between friends (WhatsApp/iMessage)
+            - SENDER POV: Someone who JUST experienced the result
+            - TONE: Shocked, excited, informal, typo-prone
+            
+            ${FORBIDDEN}
+            
+            GOOD EXAMPLES:
+            ✅ "bro i actually slept 8 hours last night wtf"
+            ✅ "why did no one tell me about this earlier 😭"
+            ✅ "okay so i tried that thing u mentioned and... holy shit"
+            ✅ "my back doesnt hurt anymore??? im shook"
+            
+            BAD EXAMPLES (Too Salesy):
+            ❌ "You should buy this product, it has 3 features"
+            ❌ "This changed my life! Link in bio"
+            ❌ "Try the ${project.productName} method"
+            
+            WRITING RULES:
+            1. Use lowercase (except "I")
+            2. Add typos occasionally ("cant" instead of "can't")
+            3. Gen Z slang: "bro", "fr fr", "ngl", "lowkey", "wtf"
+            4. Emojis: 💀😭🔥✨ (Max 2 per message)
+            5. Show excitement through punctuation: "???" or "!!!"
+            6. Max 15 words
             `;
         
         case CreativeFormat.TWITTER_REPOST:
@@ -174,6 +237,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - BAD: "This product is great."
             - GOOD: "If you still do [Old Habit], you are playing life on hard mode."
             - GOOD: "Whatever you do, just stop eating sugar. Trust me."
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.PHONE_NOTES:
@@ -187,6 +251,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
               • Drink water
               • ${cleanAngle}
               • Call mom
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.IG_STORY_TEXT:
@@ -199,6 +264,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - TASK: A short paragraph about the struggle of "${cleanAngle}".
             - BAD: "Buy this now!"
             - GOOD: "I nearly gave up on fixing my skin until I realized this..."
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.SOCIAL_COMMENT_STACK:
@@ -209,6 +275,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - TASK: Generate 2 comments. 
               1. Skeptic: "Does this actually work tho? I've tried everything."
               2. Believer (Reply): "Yes! It literally saved my [Body Part]. 10/10."
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.MEME:
@@ -220,6 +287,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - TASK: "When you [Experience Pain] but then [Result of Hook]".
             - BAD: "Use ${project.productName}."
             - GOOD: "Me waiting for my back pain to disappear (it won't)."
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.STICKY_NOTE_REALISM:
@@ -230,6 +298,7 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - TONE: Urgent, Imperative.
             - TASK: Summarize hook into 3-4 punchy handwritten words.
             - EXAMPLE: "NO. MORE. EXCUSES."
+            ${FORBIDDEN}
             `;
 
         case CreativeFormat.REMINDER_NOTIF:
@@ -241,10 +310,137 @@ const generateTextInstruction = (format: CreativeFormat, parsedAngle: ParsedAngl
             - SENDER: "Calendar" or "Mom" or "Bestie".
             - TASK: A short, urgent reminder.
             - EXAMPLE: "Reminder: Take your supplements."
+            ${FORBIDDEN}
             `;
 
         default:
-            return `TEXT COPY INSTRUCTION: Include the text "${cleanAngle}" clearly in the image. Keep it SHORT (max 5 words).`;
+            return `TEXT COPY INSTRUCTION: Include the text "${cleanAngle}" clearly in the image. Keep it SHORT (max 5 words). ${FORBIDDEN}`;
+    }
+};
+
+// --- 5. SUBJECT FOCUS / SCENE BLOCKING ---
+
+const getSubjectFocus = (
+    marketAwareness: MarketAwareness,
+    personaVisuals: string,
+    parsedAngle: ParsedAngle,
+    project: ProjectContext
+): string => {
+    const { cleanAngle } = parsedAngle;
+    const lowerAngle = cleanAngle.toLowerCase();
+    
+    switch (marketAwareness) {
+        case MarketAwareness.UNAWARE:
+            // Map common pains to specific scenes
+            let specificScene = "";
+            
+            if (/sleep|insomnia|tired|exhausted/i.test(lowerAngle)) {
+                specificScene = `
+                    SCENE BLOCKING:
+                    - CAMERA ANGLE: POV from pillow looking up at person lying in bed
+                    - TIME: Phone screen shows 3:47 AM (Make this visible)
+                    - PERSON: Eyes wide open, staring at ceiling, one hand on forehead (frustrated gesture)
+                    - LIGHTING: Only light source is phone screen glow (blue light)
+                    - ENVIRONMENT: Messy sheets, pillow on floor, blackout curtains
+                    - EMOTION: Defeated exhaustion (NOT peaceful sleep)
+                `;
+            } else if (/pain|ache|sore|hurt|back|neck/i.test(lowerAngle)) {
+                specificScene = `
+                    SCENE BLOCKING:
+                    - CAMERA ANGLE: Side profile or 3/4 view
+                    - ACTION: Person wincing while trying to stand up from chair, one hand on lower back/neck
+                    - BODY LANGUAGE: Slight hunch, grimace on face, slow careful movement
+                    - ENVIRONMENT: Home office or living room, heating pad visible on couch
+                    - PROPS: Pain relief cream on table, used but ineffective
+                `;
+            } else if (/acne|skin|blemish|breakout|wrinkle/i.test(lowerAngle)) {
+                specificScene = `
+                    SCENE BLOCKING:
+                    - LOCATION: Bathroom, morning light
+                    - ACTION: Person looking in mirror, face turned away from reflection (avoidance), touching problem area gently
+                    - EMOTION: Self-conscious, frustrated
+                    - PROPS: Skincare products lined up (visual "graveyard"), tissue box, makeup removal wipes
+                    - LIGHTING: Harsh bathroom light showing skin texture clearly
+                `;
+            } else if (/fat|weight|diet|belly/i.test(lowerAngle)) {
+                 specificScene = `
+                    SCENE BLOCKING:
+                    - LOCATION: Bedroom or Bathroom
+                    - ACTION: Person standing on a scale, looking down with disappointment, or pinching belly fat
+                    - EMOTION: Frustrated, insecure
+                    - PROPS: Scale, old gym clothes
+                 `;
+            } else {
+                // Generic pain scene
+                specificScene = `
+                    SCENE BLOCKING:
+                    - CAPTURE: A specific moment of frustration related to "${cleanAngle}"
+                    - PERSON: Showing clear negative emotion (furrowed brow, slumped shoulders, hands covering face)
+                    - ENVIRONMENT: Cluttered with signs of struggle
+                    - TIMING: "Rock bottom" moment
+                `;
+            }
+            
+            return `
+                ${personaVisuals}
+                MARKET AWARENESS: UNAWARE (Problem-focused, NO PRODUCT)
+                ${specificScene}
+                
+                CRITICAL RULES:
+                - DO NOT show the product or solution
+                - DO NOT show relief or happiness
+                - Focus on the PAIN, not the cure
+                - This is the "Before" state
+            `;
+            
+        case MarketAwareness.PROBLEM_AWARE:
+            return `
+                ${personaVisuals}
+                MARKET AWARENESS: PROBLEM AWARE
+                
+                SCENE BLOCKING:
+                - CONCEPT: "The Graveyard of Failed Solutions"
+                - VISUAL: Wide shot of table/counter covered with OLD products that didn't work
+                - PRODUCTS: Show 5-7 half-used bottles, pills, supplements (DO NOT show ${project.productName})
+                - PERSON: In background, arms crossed, looking skeptical/fed up
+                - PROPS: Receipts, empty boxes, instruction manuals (signs of wasted money)
+                - MOOD: Cynical, defeated, "I've tried everything"
+                
+                CRITICAL: This shows they KNOW the problem but haven't found the right solution yet.
+            `;
+            
+        case MarketAwareness.SOLUTION_AWARE:
+            return `
+                ${personaVisuals}
+                MARKET AWARENESS: SOLUTION AWARE
+                
+                SCENE BLOCKING:
+                - CONCEPT: "Old Way vs New Way" comparison
+                - SPLIT SCREEN or BEFORE/AFTER setup
+                - LEFT/BEFORE: Old solution failing (e.g. person still in pain while using competitor)
+                - RIGHT/AFTER: New mechanism working (e.g. person relieved, showing ${project.productName})
+                - VISUAL CONTRAST: Use color grading (grey/blue for old, warm/golden for new)
+            `;
+            
+        case MarketAwareness.PRODUCT_AWARE:
+        case MarketAwareness.MOST_AWARE:
+            return `
+                MARKET AWARENESS: MOST AWARE (Offer-focused)
+                
+                SCENE BLOCKING:
+                - CONCEPT: "Product Hero Shot + Value Stack"
+                - CAMERA: Overhead flat lay OR product held in hand at eye level
+                - MAIN SUBJECT: ${project.productName} (3 bottles if "Buy 2 Get 1" offer)
+                - SUPPORTING PROPS: Free bonuses (ebook, guide) shown as physical items
+                - OVERLAY TEXT: "LIMITED TIME: Buy 2 Get 1 FREE" in bold
+                - BACKGROUND: Clean, uncluttered, premium surface (marble or wood)
+                - LIGHTING: Professional product photography lighting
+                
+                CRITICAL: This is about the OFFER, not the problem. Show abundance and value.
+            `;
+            
+        default:
+            return `${personaVisuals} SUBJECT: High context visual related to ${cleanAngle}.`;
     }
 };
 
@@ -286,6 +482,30 @@ const getUglyFormatPrompt = (ctx: PromptContext): string => {
 const getNativeStoryPrompt = (ctx: PromptContext): string => {
     const { format, project, visualScene, parsedAngle, textCopyInstruction, moodPrompt, culturePrompt, personaVisuals, enhancer } = ctx;
     const safety = getSafetyGuidelines(false); // STRICTER FOR HUMANS
+
+    if (format === CreativeFormat.EDUCATIONAL_RANT) {
+        return `
+        EDUCATIONAL RANT FORMAT (TikTok/Reels Style):
+        
+        CAMERA SETUP:
+        - POV: Direct-to-camera, person talking passionately
+        - FRAMING: Vertical 9:16, face takes up 60% of frame
+        - BACKGROUND: Green screen showing a screenshot of a news article/study/graph about "${parsedAngle.cleanAngle}"
+        
+        PERSON'S EXPRESSION:
+        - Emotion: Passionate, frustrated, "I need to tell you this" energy
+        - Gestures: Hands moving emphatically, pointing at screen occasionally
+        - NOT smiling - this is serious educational content
+        
+        UI OVERLAYS:
+        - Top text: "Why is nobody talking about this??" (White text, black outline)
+        - Captions: Auto-generated style captions at bottom
+        - Duration indicator: "0:15" in corner
+        
+        VIBE: Feels like a concerned friend dropping truth bombs, not a brand ad
+        ${ENHANCERS.UGC} ${safety}
+        `;
+    }
 
     if (format === CreativeFormat.CHAT_CONVERSATION) {
         const isIndo = project.targetCountry?.toLowerCase().includes("indonesia");
@@ -426,7 +646,7 @@ export const generateCreativeImage = async (
   // 1. INTELLIGENT PARSING
   const parsedAngle = parseAngle(angle);
   const culturePrompt = getCulturePrompt(country);
-  const personaVisuals = getPersonaVisualContext(persona);
+  const personaVisuals = getPersonaVisualContext(persona, parsedAngle.cleanAngle); // Passed angle for prop mapping
   
   // 2. SAFETY & MOOD
   const isUglyFormat = [
@@ -447,27 +667,7 @@ export const generateCreativeImage = async (
   }
 
   // 3. MARKET AWARENESS / SUBJECT FOCUS
-  let subjectFocus = "";
-  switch (project.marketAwareness) {
-    case MarketAwareness.UNAWARE:
-        subjectFocus = `
-            ${personaVisuals}
-            PAIN VISUALIZATION: Show the exact moment of frustration related to "${parsedAngle.cleanAngle}".
-            DO NOT show the product.
-            Example: If pain is "Can't sleep", show them staring at the ceiling at 3AM.
-            Example: If pain is "Back pain", show them wincing while standing up.
-        `;
-        break;
-    case MarketAwareness.PROBLEM_AWARE:
-        subjectFocus = `
-            ${personaVisuals}
-            SCENE: The "Graveyard of Failed Attempts". Show the user surrounded by old solutions that didn't work.
-            Vibe: Fed up, skeptical.
-        `;
-        break;
-    default:
-        subjectFocus = `${personaVisuals} SUBJECT: High context visual related to ${parsedAngle.cleanAngle}.`;
-  }
+  const subjectFocus = getSubjectFocus(project.marketAwareness || MarketAwareness.PROBLEM_AWARE, personaVisuals, parsedAngle, project);
 
   // 4. ENHANCER SELECTION
   let appliedEnhancer = ENHANCERS.PROFESSIONAL;
