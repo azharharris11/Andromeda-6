@@ -25,6 +25,10 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(({ nodes, edges, onNodeActi
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState({ x: 0, y: 0 });
 
+  // Touch State Refs
+  const lastTouchRef = useRef<{ x: number, y: number } | null>(null);
+  const lastPinchDistRef = useRef<number | null>(null);
+
   // Node Dragging State
   const [draggedNode, setDraggedNode] = useState<{ id: string; startX: number; startY: number; initialNodeX: number; initialNodeY: number } | null>(null);
 
@@ -74,6 +78,7 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(({ nodes, edges, onNodeActi
     }
   }, []);
 
+  // --- MOUSE HANDLERS ---
   const handleMouseDown = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
 
@@ -133,6 +138,89 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(({ nodes, edges, onNodeActi
     setZoom(Math.min(Math.max(0.2, zoom - e.deltaY * 0.0005), 2));
   };
 
+  // --- TOUCH HANDLERS ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+       const touch = e.touches[0];
+       const target = e.target as HTMLElement;
+
+       // Interactive check
+       if (target.closest('button') || target.closest('input') || target.closest('select')) return;
+
+       // Node check
+       const nodeElement = target.closest('.node-interactive');
+       if (nodeElement) {
+           const nodeId = nodeElement.getAttribute('data-id');
+           if (nodeId) {
+               const node = nodes.find(n => n.id === nodeId);
+               if (node) {
+                   setDraggedNode({
+                       id: nodeId,
+                       startX: touch.clientX,
+                       startY: touch.clientY,
+                       initialNodeX: node.x,
+                       initialNodeY: node.y
+                   });
+                   onSelectNode(nodeId);
+               }
+           }
+           return;
+       }
+
+       // Pan Start
+       setIsPanning(true);
+       lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+       onSelectNode(null);
+
+    } else if (e.touches.length === 2) {
+       // Pinch Start
+       const t1 = e.touches[0];
+       const t2 = e.touches[1];
+       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+       lastPinchDistRef.current = dist;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    // Prevent default scrolling only if we are actively interacting
+    if (isPanning || draggedNode || e.touches.length === 2) {
+        e.preventDefault(); 
+    }
+
+    if (e.touches.length === 1) {
+        const touch = e.touches[0];
+
+        if (draggedNode) {
+            const deltaX = (touch.clientX - draggedNode.startX) / zoom;
+            const deltaY = (touch.clientY - draggedNode.startY) / zoom;
+            onNodeMove(draggedNode.id, draggedNode.initialNodeX + deltaX, draggedNode.initialNodeY + deltaY);
+        } else if (isPanning && lastTouchRef.current) {
+            const dx = touch.clientX - lastTouchRef.current.x;
+            const dy = touch.clientY - lastTouchRef.current.y;
+            setOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+            lastTouchRef.current = { x: touch.clientX, y: touch.clientY };
+        }
+    } else if (e.touches.length === 2) {
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+
+        if (lastPinchDistRef.current !== null) {
+            const delta = dist - lastPinchDistRef.current;
+            const zoomSpeed = 0.005;
+            setZoom(z => Math.min(Math.max(0.2, z + delta * zoomSpeed), 2));
+        }
+        lastPinchDistRef.current = dist;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setIsPanning(false);
+    setDraggedNode(null);
+    lastTouchRef.current = null;
+    lastPinchDistRef.current = null;
+  };
+
   const renderEdges = () => {
     return edges.map(edge => {
       const sourceNode = nodes.find(n => n.id === edge.source);
@@ -162,8 +250,16 @@ const Canvas = forwardRef<CanvasHandle, CanvasProps>(({ nodes, edges, onNodeActi
   return (
     <div 
       ref={containerRef}
-      className={`w-full h-full overflow-hidden bg-[#F8FAFC] relative selection:bg-blue-100 ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
-      onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} onWheel={handleWheel}
+      className={`w-full h-full overflow-hidden bg-[#F8FAFC] relative selection:bg-blue-100 touch-none ${isPanning ? 'cursor-grabbing' : 'cursor-grab'}`}
+      onMouseDown={handleMouseDown} 
+      onMouseMove={handleMouseMove} 
+      onMouseUp={handleMouseUp} 
+      onMouseLeave={handleMouseUp} 
+      onWheel={handleWheel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
       <div style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, transformOrigin: '0 0', width: '100%', height: '100%', position: 'absolute', top: 0, left: 0 }}>
         
