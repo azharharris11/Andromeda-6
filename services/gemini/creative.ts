@@ -265,12 +265,13 @@ export const generateAdCopy = async (
     2. **MICRO-BLOG FORMAT:** Short lines. Lots of white space. No heavy paragraphs.
     3. **NATIVE CONTENT:** If the visual is a meme, write a meme caption. If it's a story, write a story.
     4. **THE "ANTI-AD" FILTER:** Would a real person post this? If no, rewrite it.
-    5. **MECHANISM RULE (CRITICAL):** 
-       - If the Input Strategy contains a Technical Mechanism Name (like 'Bio-Lock Protocol' or 'Subconscious Relational Code')...
-       - **DO NOT USE IT AS THE HEADLINE.**
-       - You MUST translate it into a simple Human Benefit.
-       - Bad: "Activate your Subconscious Relational Code."
-       - Good: "Why you keep attracting the wrong men."
+    5. **MECHANISM TRANSLATION (ABSOLUTE RULE):** 
+       - Check the input 'Core Angle'. Does it sound like a scientific term (e.g. "Bio-Lock Protocol")?
+       - IF YES: You are FORBIDDEN from using that exact term as the headline.
+       - INSTEAD: You must write the *Benefit* of that mechanism.
+       - BAD: "Introducing the Bio-Lock Protocol."
+       - GOOD: "How to finally stop the bloating cycle."
+       - Only mention the mechanism name deep in the caption/body, never the hook.
     
     ${toneInstruction}
     ${formatRule}

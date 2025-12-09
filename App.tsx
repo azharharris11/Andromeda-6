@@ -198,8 +198,10 @@ const App = () => {
         deepContext = ` [STRATEGY CONTEXT: The Big Idea Concept is "${parentNode.bigIdeaData.concept}". We are shifting the user's belief from "${parentNode.bigIdeaData.targetBelief}". Visual must prove this shift.]`;
 
     } else if (parentNode.type === NodeType.MECHANISM_NODE && parentNode.mechanismData) {
-        angleToUse = parentNode.mechanismData.scientificPseudo;
-        deepContext = ` [STRATEGY CONTEXT: Mechanism Name: "${parentNode.mechanismData.scientificPseudo}". HOW IT WORKS (UMS): ${parentNode.mechanismData.ums}. WHY OLD WAY FAILED (UMP): ${parentNode.mechanismData.ump}. Visual must show this unique mechanism in action.]`;
+        // --- SURGICAL FIX: FORCE BENEFIT-DRIVEN ANGLE ---
+        // Instead of sending the technical name ("Bio-Lock Protocol"), we send the UMS (Benefit/Solution).
+        angleToUse = `How to solve the problem using ${parentNode.mechanismData.scientificPseudo}: ${parentNode.mechanismData.ums}`;
+        deepContext = ` [STRATEGY CONTEXT: The core concept is "${parentNode.mechanismData.scientificPseudo}". BUT DO NOT USE THIS NAME AS THE HEADLINE. Focus on the explanation: ${parentNode.mechanismData.ums}. WHY OLD WAY FAILED (UMP): ${parentNode.mechanismData.ump}.]`;
 
     } else if (parentNode.type === NodeType.STORY_NODE && parentNode.storyData) {
         angleToUse = parentNode.storyData.title;
